@@ -1,7 +1,7 @@
 [project]
-name = "bakery"
-version = "luna-0.1.0"
-description = ""
+name = "bakery-lnua"
+version = "0.1.0"
+description = "bakery luna 1.0"
 readme = "README.md"
 requires-python = ">=3.11.14,<3.12"
 dependencies = [

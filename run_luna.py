@@ -28,12 +28,13 @@ import numpy as np
 from tqdm import tqdm
 
 # Bakery imports
-from bakery.core.entities import Frame, PipelineConfig
+from bakery.core.entities import Frame, PipelineConfig, FocusLensConfig
 from bakery.adapters.openvino.model_repository import ModelRepository
 from bakery.adapters.openvino.inference_engine import InferenceEngine
 from bakery.pipeline.dual_model_pipeline import DualModelPipeline
 from bakery.annotators.disney_annotator import DisneyAnnotator, RenderConfig
 from bakery.core.entities.model_config import ModelType
+from bakery.utils.focus_lens import crop_info_to_tuple
 
 
 def discover_models(models_dir: Path) -> tuple:
@@ -114,8 +115,20 @@ def create_pipeline(seg_model, pose_model, args) -> DualModelPipeline:
         class_filter=args.classes,
     )
 
+    # Create Focus Lens config if specified
+    focus_lens_config = None
+    if args.focus_size is not None:
+        focus_lens_config = FocusLensConfig(
+            focus_size=args.focus_size,
+            focus_x=args.focus_x,
+            focus_y=args.focus_y,
+            strategy=args.focus_strategy
+        )
+        position = "centered" if focus_lens_config.is_centered else f"({args.focus_x}, {args.focus_y})"
+        print(f"   🔍 Focus Lens: {args.focus_size}px {position} ({args.focus_strategy})")
+
     # Create pipeline
-    pipeline = DualModelPipeline(seg_engine, pose_engine, pipeline_config)
+    pipeline = DualModelPipeline(seg_engine, pose_engine, pipeline_config, focus_lens_config)
 
     print(f"   ✅ Pipeline configured (seg_interval={args.seg_interval})")
 
@@ -257,11 +270,16 @@ def process_video(cap, writer, pipeline: DualModelPipeline, annotator: DisneyAnn
             detections = segmentation.to_supervision()
             keypoints = pose_estimation.to_supervision()
 
+            # Get crop info for focus lens visualization
+            crop_info = pipeline.get_crop_info()
+            focus_region = crop_info_to_tuple(crop_info)
+
             # Annotate frame
             annotated = annotator.annotate(
-                frame=frame.data,
+                frame=image,  # Use original full frame for annotation
                 detections=detections,
-                keypoints=keypoints
+                keypoints=keypoints,
+                focus_region=focus_region
             )
 
             # Write frame
@@ -328,6 +346,15 @@ Examples:
 
   # Output to custom directory
   uv run run_luna.py --video videos/sample.mp4 --models-dir exports/fp16/ --output results/my_output.mp4
+
+  # With Focus Lens (crop-based inference) - centered 640x640
+  uv run run_luna.py --video videos/sample.mp4 --models-dir exports/fp16/ --focus-size 640 --show
+
+  # Focus Lens at specific position
+  uv run run_luna.py --video videos/sample.mp4 --models-dir exports/fp16/ --focus-size 480 --focus-x 100 --focus-y 100
+
+  # Focus Lens with pad strategy (for small frames)
+  uv run run_luna.py --video videos/sample.mp4 --models-dir exports/fp16/ --focus-size 640 --focus-strategy pad
         """
     )
 
@@ -378,6 +405,36 @@ Examples:
         "--show",
         action="store_true",
         help="Show live preview during processing"
+    )
+
+    # Focus Lens arguments
+    parser.add_argument(
+        "--focus-size",
+        type=int,
+        default=None,
+        help="Focus lens size in pixels (must be multiple of 80, e.g., 480, 640)"
+    )
+
+    parser.add_argument(
+        "--focus-x",
+        type=int,
+        default=None,
+        help="Focus X position (None = centered)"
+    )
+
+    parser.add_argument(
+        "--focus-y",
+        type=int,
+        default=None,
+        help="Focus Y position (None = centered)"
+    )
+
+    parser.add_argument(
+        "--focus-strategy",
+        type=str,
+        choices=["zoom", "pad"],
+        default="zoom",
+        help="Strategy when frame < focus_size: 'zoom' (scale up) or 'pad' (add black borders)"
     )
 
     args = parser.parse_args()

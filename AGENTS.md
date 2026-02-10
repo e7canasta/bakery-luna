@@ -119,3 +119,44 @@ bakery/
 4. **Domain-Driven**: core/entities contain business logic
 5. **Framework-Agnostic**: core/ doesn't depend on external libs (OpenVINO, etc.)
 6. **Explicit Over Implicit**: All dependencies injected, no global state
+
+
+
+Bakery - FP16 Segmentation + Pose Inference - SINGLE MODEL TRANSLUCENT WITH POSE
+=================================================================================
+Versión HYBRID: Segmentación para todos los objetos + Pose skeleton para personas.
+Estilo visual Disney/Roger Rabbit con skeleton gris translúcido (uniforme y sutil).
+
+Diferencias con versión original:
+- Procesa 1 modelo segmentation + 1 modelo pose (hybrid approach)
+- Segmentación: máscaras de color para TODOS los objetos
+- Pose: skeleton (edges + vertices) solo para personas detectadas
+- Estilo translúcido consistente en TODAS las anotaciones (mismo gris sutil)
+
+Filosofía: "Complejidad por diseño, no por accidente"
+- Inferencia optimizada OpenVINO FP16 en iGPU Intel Xe
+- **Focus Lens**: Crop cuadrado configurable antes de inferir
+- **Dual Model Pipeline**: Segmentation + Pose en paralelo
+- **Anotaciones multicapa**: Background + Masks + Boxes + Labels + Skeleton
+- Live preview opcional para debugging
+- Métricas de performance medibles
+
+Visualización estilo Disney/Roger Rabbit (puro + esquinas + skeleton):
+  🎬 Mundo B&W: Frame en gris medio (oscurecido para contraste)
+  🔍 Focus Lens Region: Sutilmente más claro que el frame (~10% más brillante)
+  ✨ Halo: Glow suave alrededor de detecciones (define límites sin líneas)
+  📐 Esquinas bbox: Gris claro translúcido (30% opacity) - marcan los límites del bbox
+  🎨 Objetos detectados: COLOR COMPLETO + BRILLANTES (como toons iluminados)
+  📊 Barra de confianza: Abajo DERECHA, gris translúcido (40% opacity, MUY discreta)
+  🏷️ Labels: Abajo IZQUIERDA, TRANSLÚCIDO (40% opacity) - efecto fantasmal elegante
+  🦴 Skeleton (Pose): Edges gris claro + Vertices gris medio (30% opacity) - sutil y uniforme
+  
+Estética clásica Disney (con esquinas + skeleton sutiles):
+  - Frame base: gris medio oscurecido (0.6x → más contraste)
+  - Focus lens: gris ligeramente más claro (1.1x del base)
+  - Halo effect: Glow BLANCO/CELESTE (opacity=0.5) que define contornos como luz pura
+  - Esquinas bbox: Gris claro translúcido (30% opacity) → marcan límites sin ser invasivas
+  - Objetos detectados: Color original + brightness boost (1.2x) → "spotlight effect"
+  - Labels & barra: Translúcidos (40% opacity) → efecto fantasmal
+  - Skeleton pose: Gris claro/medio (30% opacity) → líneas y puntos sutiles, no invasivos
+  - Efecto: objetos coloridos emergen con aura de luz + anotaciones grises fantasmales
