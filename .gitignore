@@ -3,3 +3,9 @@ models/**
 .venv/**
 .obsidian/**
 .archive/**
+
+.data/**
+.results/**
+.runs/**
+.pytest_cache/**
+
