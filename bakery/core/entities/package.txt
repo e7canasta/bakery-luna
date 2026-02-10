@@ -1,0 +1,31 @@
+  Entidades Implementadas                                                                                                                                                                                         
+                                                                                                                                                                                                                  
+  Frame entities (core/entities/frame.py):                                                                                                                                                                        
+  - CropInfo - Immutable crop info (frozen dataclass)                                                                                                                                                             
+  - Frame - Video frame with metadata, support for cropping                                                                                                                                                       
+                                                                                                                                                                                                                  
+  Detection entities (core/entities/detection.py):                                                                                                                                                                
+  - BoundingBox - Bounding box with confidence and class ID                                                                                                                                                       
+  - Mask - Binary segmentation mask                                                                                                                                                                               
+  - Segmentation - Aggregate of detections (bboxes + masks)                                                                                                                                                       
+                                                                                                                                                                                                                  
+  Pose entities (core/entities/pose.py):                                                                                                                                                                          
+  - KeyPoint - Single keypoint with confidence                                                                                                                                                                    
+  - Skeleton - 17 COCO keypoints for a person                                                                                                                                                                     
+  - PoseEstimation - Aggregate of skeletons                                                                                                                                                                       
+  - COCO_KEYPOINT_NAMES - Named keypoint indices                                                                                                                                                                  
+                                                                                                                                                                                                                  
+  Config entities (core/entities/model_config.py):                                                                                                                                                                
+  - ModelConfig - Single model configuration (size, resolution, device, precision)                                                                                                                                
+  - PipelineConfig - Complete pipeline configuration (seg + pose + params)                                                                                                                                        
+  - Enums: ModelSize, Device, Precision     
+
+
+  📊 Luna Progress Tracker                                                                                                                                                                                        
+                                                                                                                                                                                                                  
+  - Phase 1.1: Utilities (geometry, metrics) ✅                                                                                                                                                                   
+  - Phase 1.2: Core Entities (Frame, Detection, Pose, Config) ✅                                                                                                                                                  
+  - Phase 1.3: Preprocessing (letterbox, caching)                                                                                                                                                                 
+  - Phase 1.4: Postprocessing (NMS, mask generation)                                                                                                                                                              
+  - Phase 1.5: Annotators (Disney/Roger Rabbit style)                                                                                                                                                             
+  - Phase 1.6: Facade (refactor run_lens.py)  
