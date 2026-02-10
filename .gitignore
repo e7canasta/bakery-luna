@@ -1,5 +1,8 @@
 models/
 models/**
+.models/
+.models/**
+
 .venv/**
 .obsidian/**
 .archive/**
@@ -7,9 +10,31 @@ models/**
 .references/**
 .docs/**
 
+config/
+config/**
+
+results/
+results/**
+results/output_luna.mp4
+
+uv.lock
+
+data/**
+data/
+.data/
 .data/**
+.data/videos/**
+
+results/
+results/**
+.results/
 .results/**
+
+.runs/
 .runs/**
+runs/
+runs/**
+
 .pytest_cache/**
 
 .agents.md
