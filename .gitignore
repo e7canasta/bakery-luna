@@ -4,8 +4,15 @@ models/**
 .obsidian/**
 .archive/**
 
+.references/**
+.docs/**
+
 .data/**
 .results/**
 .runs/**
 .pytest_cache/**
 
+.agents.md
+.readme.md
+.claude.md
+data/videos/vador3.mp4
