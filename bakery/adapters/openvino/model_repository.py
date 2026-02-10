@@ -173,8 +173,14 @@ class ModelRepository:
 
         resolution = h
 
-        # Detect precision from model path (fp16 vs fp32)
-        precision = Precision.FP16 if "fp16" in str(model_path).lower() else Precision.FP32
+        # Detect precision from model path (int8 vs fp16 vs fp32)
+        path_str = str(model_path).lower()
+        if "int8" in path_str:
+            precision = Precision.INT8
+        elif "fp16" in path_str:
+            precision = Precision.FP16
+        else:
+            precision = Precision.FP32
 
         # Default device
         device = Device.GPU

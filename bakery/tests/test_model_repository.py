@@ -275,6 +275,26 @@ class TestMetadataExtractionBehavior:
         assert len(models) == 1
         assert models[0].precision == Precision.FP16
 
+    def test_detects_int8_precision(self, tmp_path):
+        """
+        Scenario: INT8 precision detected from path
+            Given a model path containing "int8"
+            When I discover models
+            Then ModelConfig should have Precision.INT8
+        """
+        # Given
+        repo_dir = tmp_path / "models_int8"
+        repo_dir.mkdir()
+        self._create_mock_segmentation_model(repo_dir / "model_int8.xml")
+
+        # When
+        repository = ModelRepository(repo_dir)
+        models = repository.discover_models()
+
+        # Then
+        assert len(models) == 1
+        assert models[0].precision == Precision.INT8
+
 
 class TestGetModelByTypeBehavior:
     """
