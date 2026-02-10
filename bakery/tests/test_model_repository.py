@@ -110,8 +110,10 @@ class TestModelDiscoveryBehavior:
         subdir2.mkdir(parents=True)
 
         # Create models in different subdirectories
-        self._create_mock_segmentation_model(subdir1 / "model1.xml")
-        self._create_mock_pose_model(subdir2 / "model2.xml")
+        # Note: filenames must match detection patterns (seg_ or -seg for segmentation,
+        # pose_ or -pose for pose) otherwise the model type detection fails
+        self._create_mock_segmentation_model(subdir1 / "yolo-seg_model.xml")
+        self._create_mock_pose_model(subdir2 / "yolo-pose_model.xml")
 
         # When
         repository = ModelRepository(repo_dir)

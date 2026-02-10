@@ -9,10 +9,11 @@ from typing import Optional, Tuple
 import numpy as np
 import cv2
 import supervision as sv
-from bakery.core.entities.frame import Frame
+from bakery.core.entities.frame import Frame, CropInfo
 from bakery.core.entities.detection import Segmentation, BoundingBox, Mask
 from bakery.core.entities.pose import PoseEstimation, Skeleton
 from bakery.core.entities.model_config import PipelineConfig
+from bakery.core.entities.focus_lens_config import FocusLensConfig
 from bakery.adapters.openvino.inference_engine import InferenceEngine
 from bakery.adapters.openvino.preprocessing import PreprocessCache
 from bakery.adapters.openvino.postprocessing import (
@@ -20,6 +21,11 @@ from bakery.adapters.openvino.postprocessing import (
     postprocess_pose
 )
 from bakery.utils.metrics import PerformanceMetrics
+from bakery.utils.focus_lens import (
+    apply_focus_lens,
+    map_detections_to_full_frame,
+    map_keypoints_to_full_frame,
+)
 
 
 class DualModelPipeline:
@@ -38,7 +44,8 @@ class DualModelPipeline:
         self,
         seg_engine: InferenceEngine,
         pose_engine: InferenceEngine,
-        config: PipelineConfig
+        config: PipelineConfig,
+        focus_lens_config: Optional[FocusLensConfig] = None
     ):
         """
         Initialize dual-model pipeline.
@@ -47,15 +54,21 @@ class DualModelPipeline:
             seg_engine: Inference engine for segmentation model
             pose_engine: Inference engine for pose estimation model
             config: Pipeline configuration
+            focus_lens_config: Optional focus lens configuration for crop-based inference
 
         Example:
             >>> seg_engine = InferenceEngine(seg_config)
             >>> pose_engine = InferenceEngine(pose_config)
             >>> pipeline = DualModelPipeline(seg_engine, pose_engine, config)
+            >>> # With focus lens:
+            >>> from bakery.core.entities import FocusLensConfig
+            >>> focus_config = FocusLensConfig(focus_size=640)
+            >>> pipeline = DualModelPipeline(seg_engine, pose_engine, config, focus_config)
         """
         self.seg_engine = seg_engine
         self.pose_engine = pose_engine
         self.config = config
+        self.focus_lens_config = focus_lens_config
 
         # Preprocessing cache
         self.preprocess_cache = PreprocessCache()
@@ -65,6 +78,9 @@ class DualModelPipeline:
 
         # Cached segmentation results
         self._cached_segmentation: Optional[Segmentation] = None
+
+        # Current crop info (for external use, e.g., annotation)
+        self._current_crop_info: Optional[CropInfo] = None
 
     def process_frame(
         self,
@@ -84,6 +100,15 @@ class DualModelPipeline:
             >>> segmentation, poses = pipeline.process_frame(frame)
         """
         self.metrics.total_frames += 1
+
+        # Store original frame dimensions (for mapping back from focus lens)
+        orig_width, orig_height = frame.width, frame.height
+
+        # Apply Focus Lens if configured
+        if self.focus_lens_config is not None:
+            frame, self._current_crop_info = apply_focus_lens(frame, self.focus_lens_config)
+        else:
+            self._current_crop_info = None
 
         # Get model input shapes
         seg_shape = self.seg_engine.get_input_shape()
@@ -143,6 +168,15 @@ class DualModelPipeline:
             frame.frame_id, pose_meta
         )
         self.metrics.pose_runs += 1
+
+        # Map results back to full frame if Focus Lens was applied
+        if self._current_crop_info is not None:
+            segmentation = self._map_segmentation_to_full_frame(
+                segmentation, self._current_crop_info, orig_width, orig_height
+            )
+            pose_estimation = self._map_pose_to_full_frame(
+                pose_estimation, self._current_crop_info
+            )
 
         return segmentation, pose_estimation
 
@@ -319,3 +353,150 @@ class DualModelPipeline:
         """
         self.metrics = PerformanceMetrics()
         self._cached_segmentation = None
+        self._current_crop_info = None
+
+    def get_crop_info(self) -> Optional[CropInfo]:
+        """
+        Get current crop info from last processed frame.
+
+        Returns:
+            CropInfo if Focus Lens is active, None otherwise.
+            Useful for passing to annotators to show focus region.
+
+        Example:
+            >>> crop_info = pipeline.get_crop_info()
+            >>> if crop_info:
+            ...     print(f"Focus region: {crop_info.x}, {crop_info.y}")
+        """
+        return self._current_crop_info
+
+    def _map_segmentation_to_full_frame(
+        self,
+        segmentation: Segmentation,
+        crop_info: CropInfo,
+        full_width: int,
+        full_height: int
+    ) -> Segmentation:
+        """
+        Map segmentation from cropped to full frame coordinates.
+
+        Args:
+            segmentation: Segmentation in cropped frame coordinates
+            crop_info: Crop information from Focus Lens
+            full_width: Full frame width
+            full_height: Full frame height
+
+        Returns:
+            Segmentation with coordinates in full frame space
+        """
+        if len(segmentation) == 0:
+            return segmentation
+
+        # Convert to supervision format
+        sv_detections = segmentation.to_supervision()
+
+        # Map to full frame
+        mapped_detections = map_detections_to_full_frame(
+            sv_detections, crop_info, full_width, full_height
+        )
+
+        # Convert back to Segmentation entity
+        if len(mapped_detections) == 0:
+            return Segmentation.empty(segmentation.frame_id)
+
+        bbox_objects = []
+        mask_objects = []
+
+        for i in range(len(mapped_detections)):
+            # Create BoundingBox
+            bbox = BoundingBox.from_xyxy(
+                mapped_detections.xyxy[i],
+                mapped_detections.confidence[i],
+                int(mapped_detections.class_id[i])
+            )
+            bbox_objects.append(bbox)
+
+            # Create Mask
+            if mapped_detections.mask is not None and i < len(mapped_detections.mask):
+                mask_data = mapped_detections.mask[i]
+            else:
+                mask_data = np.zeros((full_height, full_width), dtype=np.bool_)
+
+            mask = Mask(data=mask_data, bbox=bbox)
+            mask_objects.append(mask)
+
+        return Segmentation(
+            frame_id=segmentation.frame_id,
+            bboxes=bbox_objects,
+            masks=mask_objects
+        )
+
+    def _map_pose_to_full_frame(
+        self,
+        pose_estimation: PoseEstimation,
+        crop_info: CropInfo
+    ) -> PoseEstimation:
+        """
+        Map pose estimation from cropped to full frame coordinates.
+
+        Args:
+            pose_estimation: PoseEstimation in cropped frame coordinates
+            crop_info: Crop information from Focus Lens
+
+        Returns:
+            PoseEstimation with coordinates in full frame space
+        """
+        if len(pose_estimation) == 0:
+            return pose_estimation
+
+        # Convert to supervision format
+        sv_keypoints = pose_estimation.to_supervision()
+
+        # Map to full frame
+        mapped_keypoints = map_keypoints_to_full_frame(sv_keypoints, crop_info)
+
+        # Convert back to PoseEstimation entity
+        if len(mapped_keypoints) == 0:
+            return PoseEstimation.empty(pose_estimation.frame_id)
+
+        skeleton_objects = []
+
+        for i in range(len(mapped_keypoints)):
+            # Get original skeleton for bbox info
+            orig_skeleton = pose_estimation.skeletons[i]
+
+            # Map bbox as well
+            orig_bbox = orig_skeleton.bbox
+            scale = crop_info.scale_factor
+
+            if scale != 1.0:
+                new_x1 = (orig_bbox.x1 / scale) + (crop_info.x / scale)
+                new_y1 = (orig_bbox.y1 / scale) + (crop_info.y / scale)
+                new_x2 = (orig_bbox.x2 / scale) + (crop_info.x / scale)
+                new_y2 = (orig_bbox.y2 / scale) + (crop_info.y / scale)
+            else:
+                new_x1 = orig_bbox.x1 + crop_info.x
+                new_y1 = orig_bbox.y1 + crop_info.y
+                new_x2 = orig_bbox.x2 + crop_info.x
+                new_y2 = orig_bbox.y2 + crop_info.y
+
+            mapped_bbox = BoundingBox(
+                x1=new_x1,
+                y1=new_y1,
+                x2=new_x2,
+                y2=new_y2,
+                confidence=orig_bbox.confidence,
+                class_id=orig_bbox.class_id
+            )
+
+            # Create new Skeleton with mapped keypoints
+            skeleton = Skeleton.from_array(
+                mapped_keypoints.xy[i],
+                bbox=mapped_bbox
+            )
+            skeleton_objects.append(skeleton)
+
+        return PoseEstimation(
+            frame_id=pose_estimation.frame_id,
+            skeletons=skeleton_objects
+        )

@@ -4,6 +4,7 @@ from .frame import Frame, CropInfo
 from .detection import BoundingBox, Mask, Segmentation
 from .pose import KeyPoint, Skeleton, PoseEstimation, COCO_KEYPOINT_NAMES
 from .model_config import ModelConfig, PipelineConfig, ModelSize, ModelType, Device, Precision
+from .focus_lens_config import FocusLensConfig
 
 __all__ = [
     # Frame
@@ -25,4 +26,6 @@ __all__ = [
     "ModelType",
     "Device",
     "Precision",
+    # Focus Lens
+    "FocusLensConfig",
 ]
