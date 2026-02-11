@@ -8,6 +8,16 @@ resolution-markers = [
     "(platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
 ]
 
+[manifest]
+members = [
+    "bakery-catalog",
+    "bakery-cli",
+    "bakery-exporters",
+    "bakery-lens",
+    "bakery-luna",
+    "bakery-runtime",
+]
+
 [[package]]
 name = "about-time"
 version = "4.2.1"
@@ -28,6 +38,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/9a/26/d43128764a6f8fe1668c4f87aba6b1fe52bea81d05a35c84a70d3c70b6f7/alive-progress-3.3.0.tar.gz", hash = "sha256:457dd2428b48dacd49854022a46448d236a48f1b7277874071c39395307e830c", size = 116281, upload-time = "2025-07-20T02:10:39.07Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/26/85/ec72f6c885703d18f3b09769645e950e14c7d0cc0a0e35d94127983f666f/alive_progress-3.3.0-py3-none-any.whl", hash = "sha256:63dd33bb94cde15ad9e5b666dbba8fedf71b72a4935d6fb9a92931e69402c9ff", size = 78403, upload-time = "2025-07-20T02:10:37.318Z" },
+]
+
+[[package]]
+name = "annotated-doc"
+version = "0.0.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/57/ba/046ceea27344560984e26a590f90bc7f4a75b06701f653222458922b558c/annotated_doc-0.0.4.tar.gz", hash = "sha256:fbcda96e87e9c92ad167c2e53839e57503ecfda18804ea28102353485033faa4", size = 7288, upload-time = "2025-11-10T22:07:42.062Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1e/d3/26bf1008eb3d2daa8ef4cacc7f3bfdc11818d111f7e2d0201bc6e3b49d45/annotated_doc-0.0.4-py3-none-any.whl", hash = "sha256:571ac1dc6991c450b25a9c2d84a3705e2ae7a53467b5d111c24fa8baabbed320", size = 5303, upload-time = "2025-11-10T22:07:40.673Z" },
 ]
 
 [[package]]
@@ -52,16 +71,135 @@ wheels = [
 ]
 
 [[package]]
-name = "bakery-lnua"
+name = "bakery-catalog"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "bakery-catalog" }
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8.0.0" }]
+
+[[package]]
+name = "bakery-cli"
+version = "0.1.0"
+source = { editable = "bakery-cli" }
 dependencies = [
+    { name = "bakery-catalog" },
+    { name = "bakery-exporters" },
+    { name = "bakery-luna" },
+    { name = "bakery-runtime" },
+    { name = "opencv-python" },
+    { name = "rich" },
+    { name = "supervision" },
+    { name = "typer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "bakery-catalog", editable = "bakery-catalog" },
+    { name = "bakery-exporters", editable = "bakery-exporters" },
+    { name = "bakery-luna", editable = "." },
+    { name = "bakery-runtime", editable = "bakery-runtime" },
+    { name = "opencv-python", specifier = ">=4.9.0" },
+    { name = "rich", specifier = ">=13.7.0" },
+    { name = "supervision", specifier = ">=0.18.0" },
+    { name = "typer", specifier = ">=0.9.0" },
+]
+
+[[package]]
+name = "bakery-exporters"
+version = "0.1.0"
+source = { editable = "bakery-exporters" }
+dependencies = [
+    { name = "bakery-catalog" },
+    { name = "numpy" },
+    { name = "ultralytics" },
+]
+
+[package.optional-dependencies]
+full = [
     { name = "nncf" },
     { name = "openvino" },
     { name = "openvino-dev" },
+    { name = "ultralytics" },
+]
+nncf = [
+    { name = "nncf" },
+]
+onnx = [
+    { name = "ultralytics" },
+]
+openvino = [
+    { name = "openvino" },
+    { name = "openvino-dev" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "bakery-catalog", editable = "bakery-catalog" },
+    { name = "nncf", marker = "extra == 'full'", specifier = ">=2.12,<2.13" },
+    { name = "nncf", marker = "extra == 'nncf'", specifier = ">=2.12,<2.13" },
+    { name = "numpy", specifier = ">=1.26.4" },
+    { name = "openvino", marker = "extra == 'full'", specifier = "==2024.0.0" },
+    { name = "openvino", marker = "extra == 'openvino'", specifier = "==2024.0.0" },
+    { name = "openvino-dev", marker = "extra == 'full'", specifier = "==2024.0.0" },
+    { name = "openvino-dev", marker = "extra == 'openvino'", specifier = "==2024.0.0" },
+    { name = "ultralytics", specifier = ">=8.4.14" },
+    { name = "ultralytics", marker = "extra == 'full'", specifier = ">=8.3.222" },
+    { name = "ultralytics", marker = "extra == 'onnx'", specifier = ">=8.3.222" },
+]
+provides-extras = ["onnx", "openvino", "nncf", "full"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=9.0.2" }]
+
+[[package]]
+name = "bakery-lens"
+version = "0.1.0"
+source = { editable = "bakery-lens" }
+dependencies = [
+    { name = "numpy" },
+    { name = "opencv-python" },
+    { name = "supervision" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=1.26.0" },
+    { name = "opencv-python", specifier = ">=4.9.0" },
+    { name = "supervision", specifier = ">=0.26.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8.0.0" }]
+
+[[package]]
+name = "bakery-luna"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "bakery-lens" },
+    { name = "bakery-runtime" },
+    { name = "numpy" },
+    { name = "opencv-python" },
     { name = "psutil" },
     { name = "supervision" },
-    { name = "ultralytics" },
 ]
 
 [package.dev-dependencies]
@@ -72,12 +210,12 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "nncf", specifier = ">=2.12,<2.13" },
-    { name = "openvino", specifier = "==2024.0.0" },
-    { name = "openvino-dev", specifier = "==2024.0.0" },
-    { name = "psutil", specifier = ">=7.1.2" },
-    { name = "supervision", specifier = ">=0.26.1" },
-    { name = "ultralytics", specifier = ">=8.3.222" },
+    { name = "bakery-lens", editable = "bakery-lens" },
+    { name = "bakery-runtime", editable = "bakery-runtime" },
+    { name = "numpy", specifier = ">=1.26.0" },
+    { name = "opencv-python", specifier = ">=4.9.0" },
+    { name = "psutil", specifier = ">=7.0.0" },
+    { name = "supervision", specifier = ">=0.26.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -85,6 +223,31 @@ dev = [
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
 ]
+
+[[package]]
+name = "bakery-runtime"
+version = "0.1.0"
+source = { editable = "bakery-runtime" }
+dependencies = [
+    { name = "bakery-catalog" },
+    { name = "numpy" },
+    { name = "openvino" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "bakery-catalog", editable = "bakery-catalog" },
+    { name = "numpy", specifier = ">=1.26.0" },
+    { name = "openvino", specifier = ">=2024.0.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8.0.0" }]
 
 [[package]]
 name = "certifi"
@@ -142,6 +305,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/65/f6/62fdd5feb60530f50f7e38b4f6a1d5203f4d16ff4f9f0952962c044e919a/charset_normalizer-3.4.4-cp311-cp311-win_amd64.whl", hash = "sha256:5ae497466c7901d54b639cf42d5b8c1b6a4fead55215500d2f486d34db48d016", size = 106978, upload-time = "2025-10-14T04:40:50.844Z" },
     { url = "https://files.pythonhosted.org/packages/7a/9d/0710916e6c82948b3be62d9d398cb4fcf4e97b56d6a6aeccd66c4b2f2bd5/charset_normalizer-3.4.4-cp311-cp311-win_arm64.whl", hash = "sha256:65e2befcd84bc6f37095f5961e68a6f077bf44946771354a28ad434c2cce0ae1", size = 99969, upload-time = "2025-10-14T04:40:52.272Z" },
     { url = "https://files.pythonhosted.org/packages/0a/4c/925909008ed5a988ccbb72dcc897407e5d6d3bd72410d69e051fc0c14647/charset_normalizer-3.4.4-py3-none-any.whl", hash = "sha256:7a32c560861a02ff789ad905a2fe94e3f840803362c84fecf1851cb4cf3dc37f", size = 53402, upload-time = "2025-10-14T04:42:31.76Z" },
+]
+
+[[package]]
+name = "click"
+version = "8.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3d/fa/656b739db8587d7b5dfa22e22ed02566950fbfbcdc20311993483657a5c0/click-8.3.1.tar.gz", hash = "sha256:12ff4785d337a1bb490bb7e9c2b1ee5da3112e94a8622f26a6c77f5d2fc6842a", size = 295065, upload-time = "2025-11-15T20:45:42.706Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/98/78/01c019cdb5d6498122777c1a43056ebb3ebfeef2076d9d026bfe15583b2b/click-8.3.1-py3-none-any.whl", hash = "sha256:981153a64e25f12d547d3426c367a4857371575ee7ad18df2a6183ab0545b2a6", size = 108274, upload-time = "2025-11-15T20:45:41.139Z" },
 ]
 
 [[package]]
@@ -1139,6 +1314,15 @@ wheels = [
 ]
 
 [[package]]
+name = "shellingham"
+version = "1.5.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/58/15/8b3609fd3830ef7b27b655beb4b4e9c62313a4e8da8c676e142cc210d58e/shellingham-1.5.4.tar.gz", hash = "sha256:8dbca0739d487e5bd35ab3ca4b36e11c4078f3a234bfce294b0a0291363404de", size = 10310, upload-time = "2023-10-24T04:13:40.426Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e0/f9/0595336914c5619e5f28a1fb793285925a8cd4b432c9da0a987836c7f822/shellingham-1.5.4-py2.py3-none-any.whl", hash = "sha256:7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686", size = 9755, upload-time = "2023-10-24T04:13:38.866Z" },
+]
+
+[[package]]
 name = "six"
 version = "1.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1228,7 +1412,7 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/25/d8/9e6b8e7df981a1e3ea3907fd5a74673e791da483e8c307f0b6ff012626d0/torch-2.10.0-1-cp311-none-macosx_11_0_arm64.whl", hash = "sha256:f699f31a236a677b3118bc0a3ef3d89c0c29b5ec0b20f4c4bf0b110378487464", size = 79423460, upload-time = "2026-02-06T17:37:39.657Z" },
+    { url = "https://files.pythonhosted.org/packages/0f/8b/4b61d6e13f7108f36910df9ab4b58fd389cc2520d54d81b88660804aad99/torch-2.10.0-2-cp311-none-macosx_11_0_arm64.whl", hash = "sha256:418997cb02d0a0f1497cf6a09f63166f9f5df9f3e16c8a716ab76a72127c714f", size = 79423467, upload-time = "2026-02-10T21:44:48.711Z" },
     { url = "https://files.pythonhosted.org/packages/78/89/f5554b13ebd71e05c0b002f95148033e730d3f7067f67423026cc9c69410/torch-2.10.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:3282d9febd1e4e476630a099692b44fdc214ee9bf8ee5377732d9d9dfe5712e4", size = 145992610, upload-time = "2026-01-21T16:25:26.327Z" },
     { url = "https://files.pythonhosted.org/packages/ae/30/a3a2120621bf9c17779b169fc17e3dc29b230c29d0f8222f499f5e159aa8/torch-2.10.0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:a2f9edd8dbc99f62bc4dfb78af7bf89499bca3d753423ac1b4e06592e467b763", size = 915607863, upload-time = "2026-01-21T16:25:06.696Z" },
     { url = "https://files.pythonhosted.org/packages/6f/3d/c87b33c5f260a2a8ad68da7147e105f05868c281c63d65ed85aa4da98c66/torch-2.10.0-cp311-cp311-win_amd64.whl", hash = "sha256:29b7009dba4b7a1c960260fc8ac85022c784250af43af9fb0ebafc9883782ebd", size = 113723116, upload-time = "2026-01-21T16:25:21.916Z" },
@@ -1272,6 +1456,21 @@ wheels = [
 ]
 
 [[package]]
+name = "typer"
+version = "0.21.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "annotated-doc" },
+    { name = "click" },
+    { name = "rich" },
+    { name = "shellingham" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f2/1e/a27cc02a0cd715118c71fa2aef2c687fdefc3c28d90fd0dd789c5118154c/typer-0.21.2.tar.gz", hash = "sha256:1abd95a3b675e17ff61b0838ac637fe9478d446d62ad17fa4bb81ea57cc54028", size = 120426, upload-time = "2026-02-10T19:33:46.182Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b8/cc/d59f893fbdfb5f58770c05febfc4086a46875f1084453621c35605cec946/typer-0.21.2-py3-none-any.whl", hash = "sha256:c3d8de54d00347ef90b82131ca946274f017cffb46683ae3883c360fa958f55c", size = 56728, upload-time = "2026-02-10T19:33:48.01Z" },
+]
+
+[[package]]
 name = "typing-extensions"
 version = "4.15.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1291,7 +1490,7 @@ wheels = [
 
 [[package]]
 name = "ultralytics"
-version = "8.4.13"
+version = "8.4.14"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "matplotlib" },
@@ -1307,9 +1506,9 @@ dependencies = [
     { name = "torchvision" },
     { name = "ultralytics-thop" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c2/71/256321ae4e3ebb4ef7fefd92cc7d5a4007265c05dfaa3a2c61234aba2aa6/ultralytics-8.4.13.tar.gz", hash = "sha256:ad690f4487d85153220f84d22fe08195f3294386e432582c0efd711a26086f11", size = 1014145, upload-time = "2026-02-08T22:00:42.722Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3c/dc/7947df41679c009bc33b61e10d6274a8ec885206b726ebb6027d5f204b35/ultralytics-8.4.14.tar.gz", hash = "sha256:360dff28ecb6cc7bf561aadf5bfe208c3900380bf1d4b2b190cb8db60e7b7626", size = 1014432, upload-time = "2026-02-10T11:31:51.342Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3b/ea/eb45b4a57bb70182a382ff5b9d0824e9e3fc5751bc33626fa8eca52cfb8f/ultralytics-8.4.13-py3-none-any.whl", hash = "sha256:7b5b5b032c5e848213df39c068a007b1a6d648443cdc032e7189a4aa1e82bc1c", size = 1188422, upload-time = "2026-02-08T22:00:36.889Z" },
+    { url = "https://files.pythonhosted.org/packages/89/39/3b19ee32a174c285c6b2bdf5cec222155938e5f0cf3fef997df131f98189/ultralytics-8.4.14-py3-none-any.whl", hash = "sha256:0ce8f4081c1e7dd96a7a3ac82a820681443042609c4b48adca85a2289cdaef17", size = 1188742, upload-time = "2026-02-10T11:31:47.44Z" },
 ]
 
 [[package]]

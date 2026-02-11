@@ -143,7 +143,9 @@ class DualModelPipeline:
             seg_outputs = self.seg_engine.infer_tensor(seg_tensor)
 
             # 2. Postprocess (delegated to engine)
-            boxes, scores, class_ids, masks = self.seg_engine.postprocess(seg_outputs, seg_meta)
+            boxes, scores, class_ids, masks = self.seg_engine.postprocess(
+                seg_outputs, seg_meta, classes=self.config.class_filter
+            )
 
             # 3. Create domain Entity
             self._cached_segmentation = self._create_segmentation(
