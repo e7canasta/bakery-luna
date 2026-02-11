@@ -37,38 +37,66 @@ from bakery.core.entities.model_config import ModelType
 from bakery.utils.focus_lens import crop_info_to_tuple
 
 
-def discover_models(models_dir: Path) -> tuple:
+def discover_models(models_dir: Path, args) -> tuple:
     """
-    Discover segmentation and pose models in directory.
+    Discover segmentation and pose models in directory, or use specific model paths.
 
     Args:
         models_dir: Directory containing OpenVINO models
+        args: Command-line arguments (may contain --seg-model and --pose-model)
 
     Returns:
         Tuple of (segmentation_model, pose_model) configs
     """
-    print(f"\n🔍 Discovering models in: {models_dir}")
+    from bakery.core.entities.model_config import ModelConfig, Device, Precision
 
-    repository = ModelRepository(models_dir)
-    models = repository.discover_models()
+    seg_model = None
+    pose_model = None
 
-    if not models:
-        print(f"❌ No models found in {models_dir}")
-        sys.exit(1)
+    # Check for specific model paths first
+    if args.seg_model:
+        print(f"\n📦 Using specific segmentation model: {args.seg_model}")
+        if not args.seg_model.exists():
+            print(f"❌ Segmentation model not found: {args.seg_model}")
+            sys.exit(1)
+        # Create ModelConfig from specific path
+        seg_model = _create_model_config_from_path(args.seg_model, ModelType.SEGMENTATION)
 
-    print(f"✅ Found {len(models)} model(s)")
+    if args.pose_model:
+        print(f"🦴 Using specific pose model: {args.pose_model}")
+        if not args.pose_model.exists():
+            print(f"❌ Pose model not found: {args.pose_model}")
+            sys.exit(1)
+        # Create ModelConfig from specific path
+        pose_model = _create_model_config_from_path(args.pose_model, ModelType.POSE)
 
-    # Get models by type
-    seg_model = repository.get_model_by_type(ModelType.SEGMENTATION)
-    pose_model = repository.get_model_by_type(ModelType.POSE)
+    # Discover remaining models from directory if needed
+    if not seg_model or not pose_model:
+        print(f"\n🔍 Discovering models in: {models_dir}")
 
+        repository = ModelRepository(models_dir)
+        models = repository.discover_models()
+
+        if not models and not (seg_model and pose_model):
+            print(f"❌ No models found in {models_dir}")
+            sys.exit(1)
+
+        print(f"✅ Found {len(models)} model(s)")
+
+        # Get models by type if not already specified
+        if not seg_model:
+            seg_model = repository.get_model_by_type(ModelType.SEGMENTATION)
+        if not pose_model:
+            pose_model = repository.get_model_by_type(ModelType.POSE)
+
+    # Print model info
     if seg_model:
-        print(f"   📦 Segmentation: {seg_model.model_path.name} ({seg_model.resolution}px)")
+        print(f"   📦 Segmentation: {seg_model.model_path.name} ({seg_model.resolution}px, {seg_model.precision.value})")
     else:
         print("   ⚠️  No segmentation model found")
 
     if pose_model:
-        print(f"   🦴 Pose: {pose_model.model_path.name} ({pose_model.resolution}px)")
+        print(f"   🦴 Pose: {pose_model.model_path.name} ({pose_model.resolution}px, {pose_model.precision.value})")
     else:
         print("   ⚠️  No pose model found")
 
@@ -76,7 +104,60 @@ def discover_models(models_dir: Path) -> tuple:
         print("\n❌ Both segmentation and pose models are required")
         sys.exit(1)
 
+    # Override devices if specified
+    if args.seg_device:
+        seg_model.device = Device(args.seg_device)
+        print(f"   ⚙️  Segmentation device override: {args.seg_device}")
+
+    if args.pose_device:
+        pose_model.device = Device(args.pose_device)
+        print(f"   ⚙️  Pose device override: {args.pose_device}")
+
     return seg_model, pose_model
+
+
+def _create_model_config_from_path(model_path: Path, model_type: ModelType):
+    """
+    Create ModelConfig from a specific model path.
+
+    Args:
+        model_path: Path to .xml model file
+        model_type: Type of model (SEGMENTATION or POSE)
+
+    Returns:
+        ModelConfig instance
+    """
+    import openvino as ov
+    from bakery.core.entities.model_config import ModelConfig, Device, Precision
+
+    core = ov.Core()
+    model = core.read_model(str(model_path))
+
+    # Extract resolution from input shape
+    input_shape = tuple(model.input(0).shape)
+    resolution = input_shape[2]  # Assuming [N, C, H, W]
+
+    # Detect precision from path
+    path_str = str(model_path).lower()
+    if "int8" in path_str:
+        precision = Precision.INT8
+    elif "fp16" in path_str:
+        precision = Precision.FP16
+    else:
+        precision = Precision.FP32
+
+    # Default device based on precision
+    # INT8 -> CPU (for VNNI), FP16/FP32 -> GPU
+    device = Device.CPU if precision == Precision.INT8 else Device.GPU
+
+    return ModelConfig(
+        model_path=model_path,
+        model_type=model_type,
+        resolution=resolution,
+        device=device,
+        precision=precision,
+        confidence=0.25
+    )
 
 
 def create_pipeline(seg_model, pose_model, args) -> DualModelPipeline:
@@ -355,6 +436,16 @@ Examples:
 
   # Focus Lens with pad strategy (for small frames)
   uv run run_luna.py --video videos/sample.mp4 --models-dir exports/fp16/ --focus-size 640 --focus-strategy pad
+
+  # Hybrid CPU/GPU: Segmentation on GPU (FP16), Pose on CPU (INT8/VNNI)
+  uv run run_luna.py --video videos/sample.mp4 --models-dir exports/fp16/ \\
+      --seg-model exports/fp16/.../yolo11n-seg.xml --seg-device GPU \\
+      --pose-model exports/int8/.../yolo11n-pose_int8.xml --pose-device CPU
+
+  # Hybrid CPU/GPU: Segmentation on CPU (INT8/VNNI), Pose on GPU (FP16)
+  uv run run_luna.py --video videos/sample.mp4 --models-dir exports/fp16/ \\
+      --seg-model exports/int8/.../yolo11n-seg_int8.xml --seg-device CPU \\
+      --pose-model exports/fp16/.../yolo11n-pose.xml --pose-device GPU
         """
     )
 
@@ -437,6 +528,37 @@ Examples:
         help="Strategy when frame < focus_size: 'zoom' (scale up) or 'pad' (add black borders)"
     )
 
+    # Device and model override arguments for hybrid CPU/GPU inference
+    parser.add_argument(
+        "--seg-device",
+        type=str,
+        choices=["CPU", "GPU", "AUTO"],
+        default=None,
+        help="Device for segmentation model (default: from model config)"
+    )
+
+    parser.add_argument(
+        "--pose-device",
+        type=str,
+        choices=["CPU", "GPU", "AUTO"],
+        default=None,
+        help="Device for pose model (default: from model config)"
+    )
+
+    parser.add_argument(
+        "--seg-model",
+        type=Path,
+        default=None,
+        help="Path to specific segmentation model .xml file (overrides --models-dir discovery)"
+    )
+
+    parser.add_argument(
+        "--pose-model",
+        type=Path,
+        default=None,
+        help="Path to specific pose model .xml file (overrides --models-dir discovery)"
+    )
+
     args = parser.parse_args()
 
     # Set default output path
@@ -449,8 +571,8 @@ Examples:
     print("Dual-Model Inference with Disney Aesthetic".center(60))
     print("=" * 60)
 
-    # Discover models
-    seg_model, pose_model = discover_models(args.models_dir)
+    # Discover models (or use specific model paths if provided)
+    seg_model, pose_model = discover_models(args.models_dir, args)
 
     # Create pipeline
     pipeline = create_pipeline(seg_model, pose_model, args)

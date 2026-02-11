@@ -18,7 +18,7 @@ import sys
 
 def discover_int8_models(exports_dir: Path):
     """
-    Descubre modelos INT8 disponibles.
+    Descubre modelos INT8 disponibles recursivamente.
 
     Returns:
         List[dict]: Lista de modelos con metadata
@@ -31,38 +31,37 @@ def discover_int8_models(exports_dir: Path):
 
     models = []
 
-    for model_dir in sorted(int8_dir.iterdir()):
-        if not model_dir.is_dir():
-            continue
+    # Buscar todos los archivos .xml recursivamente
+    for xml_path in sorted(int8_dir.rglob("*.xml")):
+        # Extraer nombre del modelo del path
+        # Estructura: int8/{type}/{model_name}/{variant}/{model.xml}
+        # O: int8/{model_name}/{variant}/{model.xml}
+        parts = xml_path.parts
 
-        model_name = model_dir.name
+        # El nombre del modelo está en el stem del archivo
+        model_stem = xml_path.stem
 
-        for variant_dir in sorted(model_dir.iterdir()):
-            if not variant_dir.is_dir():
-                continue
+        # Extraer nombre base del modelo (sin resolución y _int8)
+        # Ejemplo: yolo11n_320_int8 -> yolo11n
+        name_parts = model_stem.split("_")
+        model_name = name_parts[0]
+        if len(name_parts) > 1 and "-" in name_parts[0]:
+            # Caso: yolo11n-seg_320_int8
+            model_name = name_parts[0]
 
-            # Buscar archivo .xml (IR format de OpenVINO)
-            xml_files = list(variant_dir.glob("*.xml"))
-            if not xml_files:
-                continue
+        # Extraer resolución del nombre
+        resolution = None
+        for part in name_parts:
+            if part.isdigit():
+                resolution = int(part)
+                break
 
-            xml_path = xml_files[0]
-
-            # Extraer resolución del nombre
-            # Ejemplo: yolov11n_320_int8.xml
-            parts = xml_path.stem.split("_")
-            resolution = None
-            for part in parts:
-                if part.isdigit():
-                    resolution = int(part)
-                    break
-
-            models.append({
-                "name": model_name,
-                "resolution": resolution,
-                "path": xml_path,
-                "variant": variant_dir.name,
-            })
+        models.append({
+            "name": model_name,
+            "resolution": resolution,
+            "path": xml_path,
+            "variant": xml_path.parent.name,
+        })
 
     return models
 
@@ -93,33 +92,34 @@ def verify_model_precision(model_path: Path, device: str = "CPU"):
     print(f"\n🔍 Cargando modelo: {model_path.name}")
     model = core.read_model(model_path)
 
-    # 2. Analizar tipos de operaciones en el grafo
+    # 2. Analizar operaciones en el grafo
     print(f"   📊 Analizando grafo del modelo...")
 
-    int8_ops = 0
-    fp16_ops = 0
-    fp32_ops = 0
-    other_ops = 0
+    # Contar operaciones relevantes
+    compute_ops = {"Convolution", "MatMul", "GroupConvolution", "ConvolutionBackpropData"}
+
+    total_compute_ops = 0
+    fake_quantize_ops = 0
 
     for op in model.get_ops():
-        # Get output tensor type
-        output_type = op.get_output_element_type(0)
+        op_type = op.get_type_name()
 
-        if output_type == Type.i8 or output_type == Type.u8:
-            int8_ops += 1
-        elif output_type == Type.f16:
-            fp16_ops += 1
-        elif output_type == Type.f32:
-            fp32_ops += 1
-        else:
-            other_ops += 1
+        if op_type in compute_ops:
+            total_compute_ops += 1
+        elif op_type == "FakeQuantize":
+            fake_quantize_ops += 1
 
-    total_ops = int8_ops + fp16_ops + fp32_ops + other_ops
+    # FakeQuantize indica cuantización INT8 en OpenVINO IR
+    # Un modelo INT8 típico tiene ~2-3 FakeQuantize por cada Conv (entrada, pesos, salida)
+    is_quantized = fake_quantize_ops > 0
+    quantization_ratio = fake_quantize_ops / total_compute_ops if total_compute_ops > 0 else 0
 
-    print(f"   📌 Total operaciones: {total_ops}")
-    print(f"      INT8 ops: {int8_ops} ({int8_ops/total_ops*100:.1f}%)")
-    print(f"      FP16 ops: {fp16_ops} ({fp16_ops/total_ops*100:.1f}%)")
-    print(f"      FP32 ops: {fp32_ops} ({fp32_ops/total_ops*100:.1f}%)")
+    print(f"   📌 Operaciones computacionales (Conv/MatMul): {total_compute_ops}")
+    print(f"   📌 FakeQuantize ops (indicador de INT8): {fake_quantize_ops}")
+    if is_quantized:
+        print(f"      ✅ Modelo tiene cuantización INT8 (ratio FQ/Conv: {quantization_ratio:.1f})")
+    else:
+        print(f"      ❌ Modelo NO tiene cuantización INT8")
 
     # 3. Compile model en device específico
     print(f"\n   🚀 Compilando modelo en device: {device}")
@@ -152,19 +152,29 @@ def verify_model_precision(model_path: Path, device: str = "CPU"):
         optimization_caps = core.get_property(device, "OPTIMIZATION_CAPABILITIES")
         print(f"      Optimization capabilities: {optimization_caps}")
 
-        # Parse capabilities
-        caps_list = [c.strip() for c in optimization_caps.split(",")]
+        # Parse capabilities (puede ser lista o string)
+        if isinstance(optimization_caps, list):
+            caps_list = optimization_caps
+        else:
+            caps_list = [c.strip() for c in str(optimization_caps).split(",")]
 
-        has_int8 = any("INT8" in c.upper() for c in caps_list)
-        has_vnni = any("VNNI" in c.upper() for c in caps_list)
+        has_int8 = any("INT8" in str(c).upper() for c in caps_list)
 
         print(f"\n      📌 INT8 support: {'✅ Sí' if has_int8 else '❌ No'}")
-        print(f"      📌 VNNI support: {'✅ Sí' if has_vnni else '❌ No'}")
 
     except Exception as e:
         print(f"      ⚠️  No se pudo obtener OPTIMIZATION_CAPABILITIES: {e}")
         has_int8 = None
-        has_vnni = None
+
+    # Check VNNI from /proc/cpuinfo (más confiable)
+    has_vnni = False
+    try:
+        with open("/proc/cpuinfo", "r") as f:
+            cpuinfo = f.read()
+            has_vnni = "avx512_vnni" in cpuinfo or "avx_vnni" in cpuinfo
+        print(f"      📌 VNNI support (CPU): {'✅ Sí' if has_vnni else '❌ No'}")
+    except Exception:
+        pass
 
     # 6. Get device name
     try:
@@ -177,11 +187,10 @@ def verify_model_precision(model_path: Path, device: str = "CPU"):
         "model_path": model_path,
         "device": device,
         "device_name": device_name,
-        "total_ops": total_ops,
-        "int8_ops": int8_ops,
-        "fp16_ops": fp16_ops,
-        "fp32_ops": fp32_ops,
-        "int8_percentage": int8_ops / total_ops * 100 if total_ops > 0 else 0,
+        "total_compute_ops": total_compute_ops,
+        "fake_quantize_ops": fake_quantize_ops,
+        "is_quantized": is_quantized,
+        "quantization_ratio": quantization_ratio,
         "has_int8_support": has_int8,
         "has_vnni_support": has_vnni,
     }
@@ -196,24 +205,27 @@ def interpret_results(results: dict):
     print("=" * 70)
 
     device = results["device"]
-    int8_pct = results["int8_percentage"]
+    is_quantized = results["is_quantized"]
+    fq_ops = results["fake_quantize_ops"]
+    compute_ops = results["total_compute_ops"]
 
     print(f"\n📊 Modelo: {results['model_path'].name}")
     print(f"🖥️  Device: {device} ({results['device_name']})")
-    print(f"📈 INT8 operations: {int8_pct:.1f}% del grafo")
+    print(f"📈 FakeQuantize ops: {fq_ops} (Conv/MatMul: {compute_ops})")
 
     # Veredicto
-    if int8_pct > 70:
+    if is_quantized and results["quantization_ratio"] >= 2:
         print("\n✅ MODELO ES REALMENTE INT8")
-        print("   La mayoría de operaciones usan INT8.")
-    elif int8_pct > 30:
+        print("   Cuantización completa detectada (FakeQuantize presente).")
+        print("   OpenVINO ejecutará operaciones en INT8 con VNNI.")
+    elif is_quantized:
         print("\n⚠️  MODELO ES PARCIALMENTE INT8")
-        print("   Algunas operaciones usan INT8, otras FP32/FP16.")
+        print("   Algunas operaciones cuantizadas.")
         print("   Esto es normal (primera/última capa suelen ser FP32).")
     else:
         print("\n❌ MODELO NO ES INT8")
-        print("   Pocas operaciones INT8 detectadas.")
-        print("   Posible fallback a FP32/FP16.")
+        print("   No hay FakeQuantize ops.")
+        print("   Modelo es FP32/FP16.")
 
     # Device support
     if results["has_int8_support"]:
@@ -233,7 +245,7 @@ def interpret_results(results: dict):
     print("=" * 70)
 
     if device == "CPU":
-        if results["has_vnni_support"] and int8_pct > 70:
+        if results["has_vnni_support"] and is_quantized:
             print("✅ Configuración óptima para CPU:")
             print("   - VNNI habilitado")
             print("   - Modelo INT8 real")
@@ -246,7 +258,7 @@ def interpret_results(results: dict):
             print("✅ INT8 funcionando, pero beneficio limitado")
 
     elif device == "GPU":
-        if results["has_int8_support"] and int8_pct > 70:
+        if results["has_int8_support"] and is_quantized:
             print("✅ GPU ejecutando INT8 realmente")
             print("   - Expect speedup en resoluciones altas (640+)")
         elif not results["has_int8_support"]:

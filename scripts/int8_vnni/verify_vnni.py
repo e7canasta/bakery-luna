@@ -169,8 +169,13 @@ def interpret_results(vnni_flags, vnni_lscpu, cpu_name, cpu_caps):
         vnni_in_openvino = any("VNNI" in str(c).upper() for c in caps_list)
         int8_in_openvino = any("INT8" in str(c).upper() for c in caps_list)
 
-        print(f"\n   📌 VNNI detectado: {'✅ Sí' if vnni_in_openvino else '❌ No'}")
+        # Nota: OpenVINO puede no reportar "VNNI" explícitamente, pero si tiene INT8
+        # y el CPU tiene VNNI (detectado en cpuinfo/lscpu), OpenVINO lo usará automáticamente
+        print(f"\n   📌 VNNI explícito en capabilities: {'✅ Sí' if vnni_in_openvino else '❌ No (pero puede estar disponible)'}")
         print(f"   📌 INT8 soportado: {'✅ Sí' if int8_in_openvino else '❌ No'}")
+        if int8_in_openvino and not vnni_in_openvino:
+            print(f"   ℹ️  Nota: OpenVINO no reporta 'VNNI' explícitamente, pero si tu CPU")
+            print(f"      tiene VNNI (verificado arriba), OpenVINO lo usará automáticamente para INT8")
 
     # Veredicto final
     print("\n" + "=" * 70)
