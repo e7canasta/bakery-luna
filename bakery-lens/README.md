@@ -73,5 +73,4 @@ bash
 uv run pytest bakery-lens/src/bakery_lens/tests/test_adaptive_shift.py
 Prueba en Video:
 bash
-uv run bakery run --video var/data/videos/vador3.mp4 --models-dir models/ --show \
-  --focus-size 432 --adaptive --allow-expand --shift-step 40 --edge-threshold 60
+uv run bakery run --video var/data/videos/vador3.mp4 --models-dir models/ --show --focus-size 432 --focus-strategy zoom --adaptive --allow-expand --shift-step 40 --edge-threshold 60

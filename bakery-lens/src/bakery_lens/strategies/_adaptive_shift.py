@@ -62,9 +62,9 @@ class AdaptiveShiftLensStrategy:
             self.target_size * (1 - self.smoothing)
         )
         
-        # Calculate derived values
-        current_w = int(self.current_size)
-        current_h = int(self.current_size)
+        # Calculate derived values, snapped to multiples of 32 (model input requirement)
+        current_w = max(32, (int(self.current_size) // 32) * 32)
+        current_h = current_w
         
         # Convert center to origin (top-left)
         focus_x = int(self.current_center_x - current_w / 2)

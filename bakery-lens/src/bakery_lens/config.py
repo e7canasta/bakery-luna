@@ -46,7 +46,7 @@ class FocusLensConfig:
         # Validate focus_size is multiple of 32
         if self.focus_size % 32 != 0:
             raise ValueError(
-                f"focus_size must be multiple of 32 (32, 64, 96, 128, 160...), "
+                f"focus_size must be multiple of 32 (32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 480, 512, 544, 576, 608, 640)"
                 f"got {self.focus_size}"
             )
 

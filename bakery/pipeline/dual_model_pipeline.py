@@ -133,7 +133,7 @@ class DualModelPipeline:
         # Currently, we assume both use the same letterbox logic.
         seg_tensor, seg_meta, pose_tensor, pose_meta = \
             self.preprocess_cache.get_or_compute(
-                frame.data, frame.frame_id,
+                frame_for_inference.data, frame.frame_id,
                 seg_shape, pose_shape
             )
 
@@ -170,7 +170,7 @@ class DualModelPipeline:
         self.metrics.pose_runs += 1
 
         # Update Focus Lens (adaptive strategy)
-        if self.lens is not None and not segmentation.is_empty:
+        if self.lens is not None and len(segmentation) > 0:
              # Convert Segmentation to sv.Detections for lens update
              # We mainly need xyxy boxes to determine edge proximity
              xyxy = np.array([[b.x1, b.y1, b.x2, b.y2] for b in segmentation.bboxes])

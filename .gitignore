@@ -14,6 +14,8 @@ uv.lock
 
 .archive/**
 .archive/
+archive/
+archive/**
 
 dist/**
 dist/
@@ -47,8 +49,6 @@ runs/**
 .obsidian/
 
 
-docs/
-docs/**
 references/
 references/**
 
@@ -75,3 +75,8 @@ scripts/**
 results/
 results/**
 uv.lock
+
+
+
+# docs/
+# docs/**

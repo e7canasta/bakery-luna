@@ -11,7 +11,7 @@ from .config import FocusLensConfig
 from ._types import CropInfo, LensResult
 from .strategies import StaticLensStrategy, AdaptiveShiftLensStrategy, LensStrategy
 from .ops.crop import apply_focus_lens
-from .ops.mapping import map_detections_to_full_frame, map_keypoints_to_full_frame
+from .ops.mapping import map_detections_to_full_frame, map_keypoints_to_full_frame, crop_info_to_tuple
 
 
 class Lens(Protocol):
@@ -127,7 +127,8 @@ __all__ = [
     "Lens",
     "create_lens",
     # Re-export pure ops for backwards compatibility / low-level usage
-    "apply_focus_lens", 
+    "apply_focus_lens",
     "map_detections_to_full_frame",
     "map_keypoints_to_full_frame",
+    "crop_info_to_tuple",
 ]
