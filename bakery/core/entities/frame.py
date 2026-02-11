@@ -21,6 +21,8 @@ class CropInfo:
         width: Width of cropped region
         height: Height of cropped region
         scale_factor: Scale factor applied (for zoom strategy)
+        pad_x: Padding added to X axis (total width padding)
+        pad_y: Padding added to Y axis (total height padding)
     """
 
     x: int
@@ -28,6 +30,8 @@ class CropInfo:
     width: int
     height: int
     scale_factor: float = 1.0
+    pad_x: int = 0
+    pad_y: int = 0
 
     def __post_init__(self):
         """Validate crop info."""

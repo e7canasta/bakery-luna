@@ -42,6 +42,8 @@ def apply_focus_lens(
     frame_h, frame_w = frame_data.shape[:2]
     focus_size = config.focus_size
     scale_factor = 1.0
+    pad_w_total = 0
+    pad_h_total = 0
 
     # Handle frames smaller than focus_size
     if frame_w < focus_size or frame_h < focus_size:
@@ -58,12 +60,12 @@ def apply_focus_lens(
 
         elif config.strategy == "pad":
             # Pad frame to focus_size
-            pad_w = max(0, focus_size - frame_w)
-            pad_h = max(0, focus_size - frame_h)
-            pad_left = pad_w // 2
-            pad_right = pad_w - pad_left
-            pad_top = pad_h // 2
-            pad_bottom = pad_h - pad_top
+            pad_w_total = max(0, focus_size - frame_w)
+            pad_h_total = max(0, focus_size - frame_h)
+            pad_left = pad_w_total // 2
+            pad_right = pad_w_total - pad_left
+            pad_top = pad_h_total // 2
+            pad_bottom = pad_h_total - pad_top
 
             frame_data = cv2.copyMakeBorder(
                 frame_data,
@@ -100,7 +102,9 @@ def apply_focus_lens(
         y=focus_y,
         width=focus_size,
         height=focus_size,
-        scale_factor=scale_factor
+        scale_factor=scale_factor,
+        pad_x=pad_w_total,
+        pad_y=pad_h_total
     )
 
     # Create cropped Frame
@@ -148,8 +152,13 @@ def map_detections_to_full_frame(
         boxes_full = boxes_full / scale
 
     # Then add offset
-    boxes_full[:, [0, 2]] += crop_info.x / scale if scale != 1.0 else crop_info.x
-    boxes_full[:, [1, 3]] += crop_info.y / scale if scale != 1.0 else crop_info.y
+    # Calculate padding offsets (assumes centered padding)
+    pad_left = crop_info.pad_x // 2
+    pad_top = crop_info.pad_y // 2
+
+    # Add crop offset (in valid/padded space) then subtract padding to return to original space
+    boxes_full[:, [0, 2]] += (crop_info.x / scale) if scale != 1.0 else (crop_info.x - pad_left)
+    boxes_full[:, [1, 3]] += (crop_info.y / scale) if scale != 1.0 else (crop_info.y - pad_top)
 
     # Handle masks
     masks_full = None
@@ -185,12 +194,32 @@ def map_detections_to_full_frame(
                 mask_full[orig_y:y_end, orig_x:x_end] = mask_resized[:actual_h, :actual_w]
             else:
                 # No zoom - just place mask at crop offset
-                y_end = min(crop_info.y + crop_h, full_height)
-                x_end = min(crop_info.x + crop_w, full_width)
-                actual_h = y_end - crop_info.y
-                actual_w = x_end - crop_info.x
-
-                mask_full[crop_info.y:y_end, crop_info.x:x_end] = mask[:actual_h, :actual_w]
+                # No zoom - just place mask at crop offset minus padding
+                # This is tricky because mask logic places content into full_frame mask
+                # If crop_info.y - pad_top < 0, it means crop starts before the frame.
+                
+                # Calculate placement in full frame
+                start_x = crop_info.x - pad_left
+                start_y = crop_info.y - pad_top
+                
+                # Calculate overlap between crop and full frame
+                # Crop region in full frame coords: [start_x, start_y, start_x+crop_w, start_y+crop_h]
+                # Frame region: [0, 0, full_width, full_height]
+                
+                # Intersection
+                inter_x1 = max(0, start_x)
+                inter_y1 = max(0, start_y)
+                inter_x2 = min(full_width, start_x + crop_w)
+                inter_y2 = min(full_height, start_y + crop_h)
+                
+                if inter_x2 > inter_x1 and inter_y2 > inter_y1:
+                    # Offsets into the mask (crop)
+                    mask_x1 = inter_x1 - start_x
+                    mask_y1 = inter_y1 - start_y
+                    mask_x2 = mask_x1 + (inter_x2 - inter_x1)
+                    mask_y2 = mask_y1 + (inter_y2 - inter_y1)
+                    
+                    mask_full[inter_y1:inter_y2, inter_x1:inter_x2] = mask[mask_y1:mask_y2, mask_x1:mask_x2]
 
             masks_full.append(mask_full)
 
@@ -245,8 +274,8 @@ def map_keypoints_to_full_frame(
         offset_x = crop_info.x / scale
         offset_y = crop_info.y / scale
     else:
-        offset_x = crop_info.x
-        offset_y = crop_info.y
+        offset_x = crop_info.x - (crop_info.pad_x // 2)
+        offset_y = crop_info.y - (crop_info.pad_y // 2)
 
     # Apply offset to valid keypoints
     xy_full[:, :, 0] = np.where(valid_mask, xy_full[:, :, 0] + offset_x, 0)
@@ -272,4 +301,12 @@ def crop_info_to_tuple(crop_info: Optional[CropInfo]) -> Optional[Tuple[int, int
     """
     if crop_info is None:
         return None
-    return (crop_info.x, crop_info.y, crop_info.width, crop_info.height)
+    # Adjust for padding to return coordinates in original frame space
+    pad_left = crop_info.pad_x // 2
+    pad_top = crop_info.pad_y // 2
+    return (
+        crop_info.x - pad_left,
+        crop_info.y - pad_top,
+        crop_info.width,
+        crop_info.height
+    )

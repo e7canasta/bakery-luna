@@ -385,10 +385,12 @@ class DualModelPipeline:
                 new_x2 = (orig_bbox.x2 / scale) + (crop_info.x / scale)
                 new_y2 = (orig_bbox.y2 / scale) + (crop_info.y / scale)
             else:
-                new_x1 = orig_bbox.x1 + crop_info.x
-                new_y1 = orig_bbox.y1 + crop_info.y
-                new_x2 = orig_bbox.x2 + crop_info.x
-                new_y2 = orig_bbox.y2 + crop_info.y
+                pad_left = crop_info.pad_x // 2
+                pad_top = crop_info.pad_y // 2
+                new_x1 = orig_bbox.x1 + crop_info.x - pad_left
+                new_y1 = orig_bbox.y1 + crop_info.y - pad_top
+                new_x2 = orig_bbox.x2 + crop_info.x - pad_left
+                new_y2 = orig_bbox.y2 + crop_info.y - pad_top
 
             mapped_bbox = BoundingBox(
                 x1=new_x1,
@@ -400,8 +402,13 @@ class DualModelPipeline:
             )
 
             # Create new Skeleton with mapped keypoints
+            # Need to combine xy and confidence for Skeleton.from_array
+            xy = mapped_keypoints.xy[i]
+            conf = mapped_keypoints.confidence[i]
+            keypoints_array = np.concatenate([xy, conf[:, np.newaxis]], axis=1)
+
             skeleton = Skeleton.from_array(
-                mapped_keypoints.xy[i],
+                keypoints_array,
                 bbox=mapped_bbox
             )
             skeleton_objects.append(skeleton)

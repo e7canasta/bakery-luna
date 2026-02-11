@@ -17,7 +17,7 @@ class FocusLensConfig:
     concentrating pixels on a region of interest for improved accuracy.
 
     Attributes:
-        focus_size: Size of the focus region in pixels (must be multiple of 80)
+        focus_size: Size of the focus region in pixels (must be multiple of 32)
         focus_x: X coordinate of crop origin (None = centered)
         focus_y: Y coordinate of crop origin (None = centered)
         strategy: How to handle frames smaller than focus_size:
@@ -41,10 +41,10 @@ class FocusLensConfig:
         if self.focus_size <= 0:
             raise ValueError(f"focus_size must be positive, got {self.focus_size}")
 
-        # Validate focus_size is multiple of 80
-        if self.focus_size % 80 != 0:
+        # Validate focus_size is multiple of 32
+        if self.focus_size % 32 != 0:
             raise ValueError(
-                f"focus_size must be multiple of 80 (80, 160, 240, 320, 400, 480, 560, 640...), "
+                f"focus_size must be multiple of 32 (32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 480, 512, 544, 576, 608, 640, ...), "
                 f"got {self.focus_size}"
             )
 
