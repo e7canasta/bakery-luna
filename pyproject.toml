@@ -1,17 +1,16 @@
 [project]
-name = "bakery-lnua"
+name = "bakery-luna"
 version = "0.1.0"
-description = "bakery luna 1.0"
+description = "Bakery Luna - Modular Vision Pipeline Package"
 readme = "README.md"
 requires-python = ">=3.11.14,<3.12"
 dependencies = [
-    "nncf>=2.12,<2.13",
-    "openvino==2024.0.0",
-    "openvino-dev==2024.0.0",
+    # Core utilities
     "psutil>=7.1.2",
     "supervision>=0.26.1",
-    "ultralytics>=8.3.222",
 ]
+# Heavy dependencies are now in bakery-exporters package
+# Install with: pip install bakery-exporters[full]
 
 [dependency-groups]
 dev = [

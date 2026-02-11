@@ -1,0 +1,47 @@
+[project]
+name = "bakery-exporters"
+version = "0.1.0"
+description = "Export and conversion pipelines for Bakery YOLO models"
+readme = "README.md"
+requires-python = ">=3.11.14,<3.12"
+dependencies = [
+    # Core dependency - bakery catalog
+    # Note: In development, install with: pip install -e ../bakery-luna
+]
+
+[project.optional-dependencies]
+# ONNX export (requires ultralytics ~500MB)
+onnx = [
+    "ultralytics>=8.3.222",
+]
+# OpenVINO conversion (requires openvino ~200MB)
+openvino = [
+    "openvino==2024.0.0",
+    "openvino-dev==2024.0.0",
+]
+# NNCF quantization (requires nncf ~100MB)
+nncf = [
+    "nncf>=2.12,<2.13",
+]
+# All dependencies (~800MB total)
+full = [
+    "ultralytics>=8.3.222",
+    "openvino==2024.0.0",
+    "openvino-dev==2024.0.0",
+    "nncf>=2.12,<2.13",
+]
+
+[project.scripts]
+bakery-export = "bakery_exporters.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bakery_exporters"]

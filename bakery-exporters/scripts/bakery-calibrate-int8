@@ -1,50 +1,26 @@
+#!/usr/bin/env python3
 """
-Bakery - INT8 Calibration with NNCF
-====================================
+Bakery Exporters - INT8 Calibration
 
-Thin wrapper around bakery-exporters for INT8 calibration.
+Calibrate YOLO models to INT8 using NNCF with real calibration data.
 
-Calibra modelos a INT8 usando NNCF con datos de calibración reales.
-
-Estructura de entrada/salida (configurable via BAKERY_MODELS_DIR o .env):
-    models/
-    └── yolo26n-seg/
-        └── 320/
-            ├── onnx/model.onnx          <- entrada
-            └── int8_calibrated/model.xml <- salida
-
-Uso:
-    # Calibrar modelo específico
-    uv run calibrate_int8.py --model yolo26n-seg --resolution 320
-
-    # Calibrar todos los modelos ONNX encontrados
-    uv run calibrate_int8.py --all
-
-    # Calibrar con resolución específica
-    uv run calibrate_int8.py --all --resolution 320
-
-Configuración:
-    Variables de entorno (o .env):
-    - BAKERY_MODELS_DIR: Directorio de modelos (default: models)
-    - BAKERY_CALIBRATION_DIR: Directorio de calibración (default: calibration_data)
-
-Requisitos:
-    - Datos de calibración pre-procesados en BAKERY_CALIBRATION_DIR/preprocessed_{resolution}/
-    - Ejecutar primero: uv run extract_calibration_frames.py
+Usage:
+    bakery-calibrate-int8 --model yolo26n-seg --resolution 320
+    bakery-calibrate-int8 --all
+    bakery-calibrate-int8 --all --resolution 320
 """
 
 import sys
 from pathlib import Path
 
-# Add project root to path for imports
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(PROJECT_ROOT))
+# Add parent directory to path if running as script
+if __name__ == "__main__" and __package__ is None:
+    sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import argparse
 import openvino as ov
 
-from bakery.catalog import config, RESOLUTIONS
-from bakery_exporters import ExportPipeline, ExportFormat
+from bakery.catalog import config, RESOLUTIONS, ModelPath
 from bakery_exporters.calibration import discover_onnx_models, CalibrationDataLoader
 
 
@@ -57,13 +33,13 @@ def main():
 Examples:
 
   # Calibrate specific model
-  uv run calibrate_int8.py --model yolo26n-seg --resolution 320
+  bakery-calibrate-int8 --model yolo26n-seg --resolution 320
 
   # Calibrate all ONNX models found
-  uv run calibrate_int8.py --all
+  bakery-calibrate-int8 --all
 
   # Calibrate all with specific resolution
-  uv run calibrate_int8.py --all --resolution 320
+  bakery-calibrate-int8 --all --resolution 320
 
 Resolutions: {', '.join(map(str, RESOLUTIONS))}
 
@@ -73,7 +49,7 @@ Configuration:
 
 Requirements:
   - Calibration data in: {config.calibration_dir}/preprocessed_{{resolution}}/
-  - Run first: uv run extract_calibration_frames.py
+  - Run first: bakery-extract-calibration-frames --resolution 320
         """
     )
 
@@ -114,7 +90,7 @@ Requirements:
     if args.output:
         config.models_dir = Path(args.output)
 
-    print("🎯 Bakery - INT8 Calibration with NNCF")
+    print("🎯 Bakery Exporters - INT8 Calibration with NNCF")
     print("=" * 70)
     print(f"📂 Models: {config.models_dir}")
     print(f"📊 Calibration data: {config.calibration_dir}")
@@ -128,7 +104,7 @@ Requirements:
     if not config.calibration_dir.exists():
         print(f"\nError: Calibration data not found in {config.calibration_dir}")
         print("\n💡 Run first:")
-        print("   uv run extract_calibration_frames.py")
+        print("   bakery-extract-calibration-frames --resolution 320")
         return 1
 
     # Discover models
@@ -159,7 +135,6 @@ Requirements:
             print(f"\n[{idx}/{len(models)}]")
             print(f"\nCalibrating: {model_info['name']} @ {model_info['resolution']}px")
             print("-" * 60)
-            print(f"   ONNX: {model_info['onnx_path'].relative_to(config.models_dir)}")
 
             # Load model ONNX
             print(f"   1️⃣  Reading ONNX model...")
@@ -169,13 +144,21 @@ Requirements:
             # Prepare calibration dataset
             print(f"   2️⃣  Preparing calibration dataset...")
             calibration_loader = CalibrationDataLoader(model_info['resolution'])
-            calibration_dataset = __import__('nncf').Dataset(calibration_loader)
+
+            try:
+                import nncf
+            except ImportError:
+                print("   ✗ Error: nncf is required for calibration")
+                print("   Install with: pip install bakery-exporters[nncf]")
+                failed.append(model_info['name'])
+                continue
+
+            calibration_dataset = nncf.Dataset(calibration_loader)
 
             # Quantize with NNCF
             print(f"   3️⃣  Quantizing to INT8 with NNCF...")
             print(f"      (This may take 1-2 minutes...)")
 
-            nncf = __import__('nncf')
             quantized_model = nncf.quantize(
                 model,
                 calibration_dataset,
@@ -184,7 +167,6 @@ Requirements:
 
             # Save quantized model
             print(f"   4️⃣  Saving INT8 calibrated model...")
-            from bakery.catalog import ModelPath
             output_path = ModelPath.build(
                 model_info['name'],
                 model_info['resolution'],
@@ -196,7 +178,7 @@ Requirements:
             calibrated.append(output_path)
 
         except Exception as e:
-            print(f"   Error calibrating {model_info['name']}: {e}")
+            print(f"   ✗ Error calibrating {model_info['name']}: {e}")
             failed.append(model_info['name'])
             import traceback
             traceback.print_exc()
