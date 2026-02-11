@@ -13,11 +13,25 @@ exports/
 .archive/**
 .archive/
 
+dist/**
+dist/
+
+backery-catalog/dist/
+backery-catalog/dist/**
+
+backery-runtime/dist/
+backery-runtime/dist/**
+
+backery-exporters/dist/
+backery-exporters/dist/**
 
 *.pt
 
-#.references/**
-# .docs/**
+
+.references/
+.references/**
+.docs/
+.docs/**
 
 config/
 config/**
@@ -50,16 +64,7 @@ runs/**
 .readme.md
 .claude.md
 data/videos/vador3.mp4
-.docs/.obsidian/app.json
-.docs/.obsidian/appearance.json
-.docs/.obsidian/community-plugins.json
-.docs/.obsidian/core-plugins.json
-.docs/.obsidian/workspace.json
-.docs/.obsidian/plugins/obsidian-style-settings/data.json
-.docs/.obsidian/plugins/obsidian-style-settings/main.js
-.docs/.obsidian/plugins/obsidian-style-settings/manifest.json
-.docs/.obsidian/plugins/obsidian-style-settings/styles.css
-.docs/.obsidian/themes/AnuPpuccin/manifest.json
+.docs/**
 .docs/.obsidian/themes/AnuPpuccin/theme.css
 calibration_data/**
 
@@ -74,3 +79,17 @@ calibration_data/**
 
 .results/**
 .results/
+results/output_luna.mp4
+.docs/next/int8_calibration/INT8_CALIBRATION_SPEC.md
+.docs/next/int8_calibration/README.md
+.docs/next/int8_vnni_cpu_load_balancing/int8_vnni_cpu_load_balancing_plan.md
+.docs/next/int8_vnni_cpu_load_balancing/INT8_VNNI_LOAD_BALANCING.md
+.docs/next/int8_vnni_cpu_load_balancing/iterative-watching-lagoon.md
+.docs/next/int8_vnni_cpu_load_balancing/VNNI_FAQ.md
+.docs/next/int8_calibration/INT8_CALIBRATION_SPEC.md
+.docs/next/int8_calibration/README.md
+.docs/next/int8_vnni_cpu_load_balancing/int8_vnni_cpu_load_balancing_plan.md
+.docs/next/int8_vnni_cpu_load_balancing/INT8_VNNI_LOAD_BALANCING.md
+.docs/next/int8_vnni_cpu_load_balancing/iterative-watching-lagoon.md
+.docs/next/int8_vnni_cpu_load_balancing/VNNI_FAQ.md
+uv.lock
