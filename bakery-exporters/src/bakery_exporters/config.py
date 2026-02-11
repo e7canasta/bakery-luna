@@ -4,7 +4,7 @@ Bakery Exporters Configuration
 Configuration management for standalone bakery-exporters usage.
 
 Can be used in two modes:
-1. Embedded: Within bakery-luna (uses bakery.catalog.config)
+1. Embedded: Within bakery-luna (uses bakery_catalog.config)
 2. Standalone: Independent package (uses this ExportersConfig)
 
 Environment Variables:
@@ -165,12 +165,12 @@ class ExportersConfig:
     @classmethod
     def from_catalog(cls, catalog_config) -> ExportersConfig:
         """
-        Create ExportersConfig from bakery.catalog.BakeryConfig.
+        Create ExportersConfig from bakery_catalog.BakeryConfig.
 
         Used when bakery-exporters is embedded in bakery-luna.
 
         Args:
-            catalog_config: BakeryConfig instance from bakery.catalog
+            catalog_config: BakeryConfig instance from bakery_catalog
 
         Returns:
             ExportersConfig with values from catalog_config

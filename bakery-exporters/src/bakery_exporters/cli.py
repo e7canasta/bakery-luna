@@ -18,7 +18,7 @@ import argparse
 from pathlib import Path
 from typing import List
 
-from bakery.catalog import (
+from bakery_catalog import (
     config,
     YOLO_VERSIONS,
     MODEL_SIZES,

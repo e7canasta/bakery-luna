@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Iterator, Optional
 import numpy as np
 
-from bakery.catalog import config
+from bakery_catalog import config
 
 
 class CalibrationDataLoader:

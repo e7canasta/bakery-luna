@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11.14,<3.12"
 dependencies = [
     # Core dependency - bakery catalog
-    # Note: In development, install with: pip install -e ../bakery-luna
+    "bakery-catalog",
 ]
 
 [project.optional-dependencies]

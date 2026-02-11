@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Optional, Iterator
 from enum import Enum
 
-from bakery.catalog import config, ModelPath
+from bakery_catalog import config, ModelPath
 
 
 class OpenVINOPrecision(Enum):

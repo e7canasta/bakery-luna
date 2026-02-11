@@ -19,7 +19,7 @@ Main Components:
 
 Usage (Embedded in bakery-luna):
     from bakery_exporters import ExportPipeline, ExportFormat
-    from bakery.catalog import config  # Uses catalog config
+    from bakery_catalog import config  # Uses catalog config
 
     pipeline = ExportPipeline()
     results = pipeline.export(...)

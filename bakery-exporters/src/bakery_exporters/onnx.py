@@ -15,7 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from bakery.catalog import config, ModelPath
+from bakery_catalog import config, ModelPath
 
 
 class OnnxExporter:

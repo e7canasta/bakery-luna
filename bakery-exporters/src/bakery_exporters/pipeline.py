@@ -17,7 +17,7 @@ from typing import List, Optional
 from dataclasses import dataclass
 from enum import Enum
 
-from bakery.catalog import config, ModelPath
+from bakery_catalog import config, ModelPath
 
 from bakery_exporters.onnx import OnnxExporter
 from bakery_exporters.openvino import OpenVINOConverter
