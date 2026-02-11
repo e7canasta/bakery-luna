@@ -4,6 +4,7 @@ Bakery CLI - Run Command
 import typer
 from pathlib import Path
 from typing import Optional, List, Tuple
+import datetime
 import time
 import cv2
 from tqdm import tqdm
@@ -24,7 +25,8 @@ from bakery_cli.shared.video import open_video_source, create_video_writer
 console = Console()
 
 def discover_models(models_dir: Path, seg_model_path: Optional[Path], pose_model_path: Optional[Path], 
-                   yolo_version: Optional[str], seg_device: Optional[str], pose_device: Optional[str], confidence: float) -> Tuple[ModelInstance, ModelInstance]:
+                   yolo_version: Optional[str], seg_device: Optional[str], pose_device: Optional[str], confidence: float,
+                   seg_size: Optional[str], pose_size: Optional[str], resolution: Optional[int]) -> Tuple[ModelInstance, ModelInstance]:
     """
     Discover segmentation and pose models in directory using bakery-catalog.
     """
@@ -35,33 +37,35 @@ def discover_models(models_dir: Path, seg_model_path: Optional[Path], pose_model
     common_resolutions = [640, 320, 512, 480, 256]
     common_versions = ["11", "26", "8"]
 
-    def find_and_build(m_type, device_arg, specific_path=None):
-        # 1. Specific path
+    def find_and_build(m_type, device_arg, size_arg, specific_path=None):
+        # 1. Specific path (Override)
         if specific_path:
-             # This path is currently tricky with catalog if it's not standard named/located
-             # But let's assume valid info for now or add fallback later
+             # Basic fallback or specific path logic
              pass
         
         # 2. Discovery
+        target_sizes = [size_arg] if size_arg else ["n", "s", "m", "l", "x"]
+        target_resolutions = [resolution] if resolution else common_resolutions
+
         for ver in common_versions:
             if yolo_version and yolo_version != ver:
                 continue
             
-            name_pattern = f"yolo{ver}{m_type}" 
-            for size in ["n", "s", "m", "l", "x"]:
+            for size in target_sizes:
                 name = f"yolo{ver}{size}-{m_type}"
-                for res in common_resolutions:
+                for res in target_resolutions:
                     # Try FP16
                     info = repo.get(name, res, "fp16")
                     if info:
-                        console.print(f"   ✅ Found {m_type}: {name} ({res}px)")
                         device = RuntimeDevice(device_arg) if device_arg else RuntimeDevice.GPU
-                        return ModelInstance.from_info(info, device=device, confidence=confidence)
+                        instance = ModelInstance.from_info(info, device=device, confidence=confidence)
+                        console.print(f"   ✅ Found {m_type}: {name} ({res}px) | Device: {instance.active_device}")
+                        return instance
         return None
 
     console.print("   Searching for compatible models...")
-    seg_instance = find_and_build("seg", seg_device, seg_model_path)
-    pose_instance = find_and_build("pose", pose_device, pose_model_path)
+    seg_instance = find_and_build("seg", seg_device, seg_size, seg_model_path)
+    pose_instance = find_and_build("pose", pose_device, pose_size, pose_model_path)
 
     if not seg_instance or not pose_instance:
          console.print("[red]❌ Could not find standard named models (e.g., yolo11n-seg_640_fp16).[/red]")
@@ -119,19 +123,33 @@ def run(
     seg_model: Optional[Path] = typer.Option(None, help="Specific seg model path"),
     pose_model: Optional[Path] = typer.Option(None, help="Specific pose model path"),
     yolo_version: str = typer.Option(None, help="Filter by YOLO version"),
+    seg_size: Optional[str] = typer.Option(None, help="Model size for segmentation (n, s, m, l, x)"),
+    pose_size: Optional[str] = typer.Option(None, help="Model size for pose (n, s, m, l, x)"),
+    resolution: Optional[int] = typer.Option(None, help="Force input resolution (e.g. 640)"),
 ):
     """
     Run the Bakery Vision Pipeline (Luna).
     """
-    if output is None:
-        output = Path("results") / "output_luna.mp4"
-
     console.rule("[bold magenta]🌙 Bakery Vision Pipeline - Luna[/bold magenta]")
     
     # 1. Discover Models
     seg_instance, pose_instance = discover_models(
-        models_dir, seg_model, pose_model, yolo_version, seg_device, pose_device, confidence
+        models_dir, seg_model, pose_model, yolo_version, seg_device, pose_device, confidence,
+        seg_size, pose_size, resolution
     )
+
+    if output is None:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        seg_name = seg_instance.info.model_name
+        seg_res = seg_instance.resolution
+        pose_name = pose_instance.info.model_name
+        pose_res = pose_instance.resolution
+        
+        output = Path("results") / f"luna_{timestamp}_{seg_name}_{seg_res}_{pose_name}_{pose_res}.mp4"
+    
+    # Ensure parent dir exists
+    if not output.parent.exists():
+        output.parent.mkdir(parents=True, exist_ok=True)
 
     # 2. Config & Pipeline
     console.print("\n🔧 Creating inference pipeline...")

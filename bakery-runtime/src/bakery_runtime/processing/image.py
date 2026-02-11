@@ -123,7 +123,8 @@ class PreprocessCache:
                     "pad_w": pad_w,
                     "pad_h": pad_h,
                     "orig_h": orig_h,
-                    "orig_w": orig_w
+                    "orig_w": orig_w,
+                    "input_shape": seg_shape
                 }
 
                 self.seg_tensor = tensor
@@ -146,7 +147,8 @@ class PreprocessCache:
                     "pad_w": seg_pad_w,
                     "pad_h": seg_pad_h,
                     "orig_h": orig_h,
-                    "orig_w": orig_w
+                    "orig_w": orig_w,
+                    "input_shape": seg_shape
                 }
 
             # Pose
@@ -159,7 +161,8 @@ class PreprocessCache:
                     "pad_w": pose_pad_w,
                     "pad_h": pose_pad_h,
                     "orig_h": orig_h,
-                    "orig_w": orig_w
+                    "orig_w": orig_w,
+                    "input_shape": pose_shape
                 }
 
             self.last_frame_id = frame_id
