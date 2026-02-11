@@ -2,11 +2,8 @@
 Lens strategy protocol.
 """
 
-from typing import Protocol, Optional, TYPE_CHECKING
+from typing import Protocol, Optional, Tuple, TYPE_CHECKING
 import supervision as sv
-
-from .._types import CropInfo
-from ..config import FocusLensConfig
 
 # Avoid circular imports if used in future
 if TYPE_CHECKING:
@@ -17,25 +14,23 @@ class LensStrategy(Protocol):
     """
     Protocol for lens cropping strategies.
     
-    Strategies decide WHERE to crop.
+    Strategies decide WHERE and HOW LARGE to crop.
     """
     
     def compute_crop_params(
         self, 
         frame_w: int, 
-        frame_h: int, 
-        frame_id: int
-    ) -> CropInfo:
+        frame_h: int
+    ) -> Tuple[int, int, int, int]:
         """
-        Compute crop parameters for the current frame.
+        Compute crop parameters (x, y, width, height).
         
         Args:
-            frame_w: Original frame width
-            frame_h: Original frame height
-            frame_id: Frame identifier
+            frame_w: Effective frame width
+            frame_h: Effective frame height
             
         Returns:
-            CropInfo with x, y, width, height, scale, padding
+            Tuple (x, y, width, height)
         """
         ...
 

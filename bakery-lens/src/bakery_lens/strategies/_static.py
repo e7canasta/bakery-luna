@@ -102,9 +102,9 @@ class StaticLensStrategy:
     def __init__(self, config: FocusLensConfig):
         self.config = config
 
-    def compute_crop_origin(self, frame_w: int, frame_h: int) -> tuple[int, int]:
+    def compute_crop_params(self, frame_w: int, frame_h: int) -> tuple[int, int, int, int]:
         """
-        Compute top-left crop origin (x, y).
+        Compute crop parameters (x, y, w, h).
         
         Args:
             frame_w: Width of frame (after any scaling/padding)
@@ -128,7 +128,7 @@ class StaticLensStrategy:
         focus_x = max(0, min(focus_x, frame_w - focus_size))
         focus_y = max(0, min(focus_y, frame_h - focus_size))
         
-        return focus_x, focus_y
+        return focus_x, focus_y, focus_size, focus_size
 
     def update(self, detections: sv.Detections) -> None:
         """No-op for static strategy."""

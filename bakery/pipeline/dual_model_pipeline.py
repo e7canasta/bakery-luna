@@ -19,12 +19,17 @@ from bakery.core.entities.focus_lens_config import FocusLensConfig
 from bakery_runtime import ModelInstance
 from bakery_runtime.processing import PreprocessCache
 
-from bakery.utils.metrics import PerformanceMetrics
-from bakery.utils.focus_lens import (
+from bakery.utils import (
+    PerformanceMetrics,
+    FPSCounter,
+    xywh2xyxy,
+    nms,
+    bbox_iou,
     apply_focus_lens,
     map_detections_to_full_frame,
     map_keypoints_to_full_frame,
 )
+from bakery_lens import create_lens
 
 
 class DualModelPipeline:
@@ -58,6 +63,17 @@ class DualModelPipeline:
         self.seg_engine = seg_engine
         self.pose_engine = pose_engine
         self.config = config
+
+        # Metrics
+        self.metrics = PerformanceMetrics()
+        self.fps_counter = FPSCounter()
+        
+        # Initialize Focus Lens
+        self.lens = None
+        if focus_lens_config:
+            self.lens = create_lens(focus_lens_config)
+            
+        # Helper for legacy support until we fully switch to bakery-lens ops usage
         self.focus_lens_config = focus_lens_config
 
         # Preprocessing cache (from bakery-runtime)
@@ -91,8 +107,19 @@ class DualModelPipeline:
         orig_width, orig_height = frame.width, frame.height
 
         # Apply Focus Lens if configured
-        if self.focus_lens_config is not None:
-            frame, self._current_crop_info = apply_focus_lens(frame, self.focus_lens_config)
+        frame_for_inference = frame
+        
+        if self.lens is not None:
+            # Use bakery-lens
+            lens_result = self.lens.process(frame.data, frame.frame_id)
+            
+            # Create a temporary Frame for inference (bakery-luna entities)
+            frame_for_inference = Frame.from_array(
+                data=lens_result.frame,
+                frame_id=frame.frame_id,
+                crop_info=lens_result.crop_info
+            )
+            self._current_crop_info = lens_result.crop_info
         else:
             self._current_crop_info = None
 
@@ -141,6 +168,18 @@ class DualModelPipeline:
             frame.frame_id, pose_meta
         )
         self.metrics.pose_runs += 1
+
+        # Update Focus Lens (adaptive strategy)
+        if self.lens is not None and not segmentation.is_empty:
+             # Convert Segmentation to sv.Detections for lens update
+             # We mainly need xyxy boxes to determine edge proximity
+             xyxy = np.array([[b.x1, b.y1, b.x2, b.y2] for b in segmentation.bboxes])
+             detections = sv.Detections(
+                 xyxy=xyxy,
+                 confidence=np.array([b.confidence for b in segmentation.bboxes]),
+                 class_id=np.array([b.class_id for b in segmentation.bboxes])
+             )
+             self.lens.update(detections)
 
         # Map results back to full frame if Focus Lens was applied
         if self._current_crop_info is not None:

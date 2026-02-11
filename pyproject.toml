@@ -12,6 +12,7 @@ dependencies = [
     "opencv-python>=4.9.0",
     # Internal packages (resolved via uv workspace)
     "bakery-runtime",
+    "bakery-lens",
 ]
 
 [dependency-groups]
@@ -28,10 +29,11 @@ build-backend = "hatchling.build"
 packages = ["bakery"]
 
 [tool.uv.workspace]
-members = ["bakery-catalog", "bakery-runtime", "bakery-exporters", "bakery-cli"]
+members = ["bakery-catalog", "bakery-runtime", "bakery-exporters", "bakery-cli", "bakery-lens"]
 
 [tool.uv.sources]
 bakery-catalog = { workspace = true }
 bakery-runtime = { workspace = true }
 bakery-exporters = { workspace = true }
 bakery-cli = { workspace = true }
+bakery-lens = { workspace = true }

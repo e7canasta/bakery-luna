@@ -118,6 +118,10 @@ def run(
     focus_x: Optional[int] = typer.Option(None, help="Focus X position"),
     focus_y: Optional[int] = typer.Option(None, help="Focus Y position"),
     focus_strategy: str = typer.Option("zoom", help="Focus strategy (zoom/pad)"),
+    adaptive: bool = typer.Option(False, help="Enable adaptive focus lens (shift strategy)"),
+    allow_expand: bool = typer.Option(False, help="Allow adaptive lens to expand size"),
+    edge_threshold: int = typer.Option(40, help="Pixels from edge to trigger shift"),
+    shift_step: int = typer.Option(80, help="Max pixels to shift per update"),
     seg_device: str = typer.Option(None, help="Device for segmentation"),
     pose_device: str = typer.Option(None, help="Device for pose"),
     seg_model: Optional[Path] = typer.Option(None, help="Specific seg model path"),
@@ -158,9 +162,19 @@ def run(
     focus_lens_config = None
     if focus_size:
         focus_lens_config = FocusLensConfig(
-            focus_size=focus_size, focus_x=focus_x, focus_y=focus_y, strategy=focus_strategy
+            focus_size=focus_size, 
+            focus_x=focus_x, 
+            focus_y=focus_y, 
+            strategy=focus_strategy,
+            adaptive=adaptive,
+            edge_threshold=edge_threshold,
+            shift_step=shift_step,
+            allow_expand=allow_expand
         )
-        console.print(f"   🔍 Focus Lens: {focus_size}px ({focus_strategy})")
+        mode_str = "Adaptive Shift" if adaptive else "Static"
+        if adaptive and allow_expand:
+            mode_str += " + Expand"
+        console.print(f"   🔍 Focus Lens: {focus_size}px ({focus_strategy}) | Mode: {mode_str}")
 
     pipeline = DualModelPipeline(seg_instance, pose_instance, pipeline_config, focus_lens_config)
     console.print(f"   ✅ Pipeline ready (seg_interval={seg_interval})")

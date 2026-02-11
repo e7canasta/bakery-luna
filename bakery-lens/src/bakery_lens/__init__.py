@@ -9,7 +9,7 @@ import supervision as sv
 
 from .config import FocusLensConfig
 from ._types import CropInfo, LensResult
-from .strategies import StaticLensStrategy, LensStrategy
+from .strategies import StaticLensStrategy, AdaptiveShiftLensStrategy, LensStrategy
 from .ops.crop import apply_focus_lens
 from .ops.mapping import map_detections_to_full_frame, map_keypoints_to_full_frame
 
@@ -69,24 +69,15 @@ class BaseLens:
                 eff_w = max(frame_w, focus_size)
                 eff_h = max(frame_h, focus_size)
         
-        # 2. Ask strategy for crop origin
-        # Note: Strategy.compute_crop_origin implementation in _static.py expects effective dimensions
-        crop_x, crop_y = self.strategy.compute_crop_origin(eff_w, eff_h)
+        # 2. Ask strategy for crop parameters
+        # Strategy returns (x, y, w, h). Currently we assume square crops (w=h)
+        # because FocusLensConfig uses a single 'focus_size'.
+        crop_x, crop_y, crop_w, crop_h = self.strategy.compute_crop_params(eff_w, eff_h)
         
-        # 3. Create a temporary config override with the computed position
-        # FocusLensConfig is frozen, so we use replace-like behavior (or just pass explicit x/y to a lower-level op)
-        # 
-        # Since apply_focus_lens takes config, we need a way to pass dynamic x/y.
-        # Let's update apply_focus_lens signature? OR create a throwaway config.
-        # Creating throwaway config is safest for now.
-        
-        # Creates a new config with the strategy-determined position
-        # We use __dict__ copy and update because dataclass is frozen? 
-        # No, frozen dataclasses support replace() but that's python 3.7+.
-        # Actually FocusLensConfig is simple enough to just instantiate new one.
-        
+        # 3. Create a temporary config override with the computed position and size
+        # We need to pass the adaptive size to the lower-level op.
         dynamic_config = FocusLensConfig(
-            focus_size=self.config.focus_size,
+            focus_size=crop_w,  # Use computed width as size
             focus_x=crop_x,
             focus_y=crop_y,
             strategy=self.config.strategy,
@@ -121,10 +112,11 @@ def create_lens(config: FocusLensConfig) -> Lens:
     Factory to create a Lens instance.
     """
     # Select strategy based on config
-    # Phase 0: Always Static
-    # Phase 1: Check config.adaptive -> AdaptiveShift
-    
-    strategy = StaticLensStrategy(config)
+    if config.adaptive:
+        strategy = AdaptiveShiftLensStrategy(config)
+    else:
+        strategy = StaticLensStrategy(config)
+        
     return BaseLens(config, strategy)
 
 
