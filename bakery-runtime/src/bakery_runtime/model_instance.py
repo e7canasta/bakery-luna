@@ -218,7 +218,7 @@ class ModelInstance:
         """
         return self._engine.infer(tensor)
 
-    def postprocess(self, raw_outputs: Dict[str, np.ndarray], metadata: Dict, classes: Optional[List[int]] = None) -> Tuple:
+    def postprocess(self, raw_outputs: Dict[str, np.ndarray], metadata: Dict) -> Tuple:
         """
         Postprocess raw model outputs into domain objects.
 
@@ -253,7 +253,6 @@ class ModelInstance:
                 output_masks,
                 metadata["input_shape"],
                 conf_threshold=self._confidence,
-                classes=classes,
             )
 
         elif self.model_type == ModelType.POSE:

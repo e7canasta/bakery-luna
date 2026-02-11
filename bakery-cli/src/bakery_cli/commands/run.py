@@ -19,6 +19,7 @@ from bakery.utils.focus_lens import crop_info_to_tuple
 # New Architecture Imports
 from bakery_catalog import ModelRepository
 from bakery_runtime import ModelInstance, Device as RuntimeDevice
+from bakery_runtime.filtering import FilterPolicy
 
 from bakery_cli.shared.video import open_video_source, create_video_writer
 
@@ -111,8 +112,15 @@ def run(
     models_dir: Path = typer.Option(..., help="Directory containing OpenVINO models"),
     output: Optional[Path] = typer.Option(None, help="Output video path (default: results/output_luna.mp4)"),
     seg_interval: int = typer.Option(5, help="Run segmentation every N frames"),
-    confidence: float = typer.Option(0.25, help="Confidence threshold"),
+    confidence: float = typer.Option(0.25, help="Global confidence threshold"),
+    seg_confidence: Optional[float] = typer.Option(None, help="Confidence override for segmentation model"),
+    pose_confidence: Optional[float] = typer.Option(None, help="Confidence override for pose model"),
     classes: Optional[List[int]] = typer.Option(None, help="Filter specific class IDs"),
+    class_confidence: Optional[List[float]] = typer.Option(None, help="Per-class confidence (paired with --classes)"),
+    keypoints: Optional[List[int]] = typer.Option(None, help="Keypoint indices to threshold"),
+    keypoint_confidence: Optional[List[float]] = typer.Option(None, help="Per-keypoint confidence (paired with --keypoints)"),
+    keypoint_confidence_all: Optional[float] = typer.Option(None, help="Blanket keypoint confidence threshold"),
+    keypoint_min_visible: Optional[int] = typer.Option(None, help="Min visible keypoints to keep a skeleton"),
     show: bool = typer.Option(False, help="Show live preview"),
     focus_size: Optional[int] = typer.Option(None, help="Focus lens size"),
     focus_x: Optional[int] = typer.Option(None, help="Focus X position"),
@@ -158,6 +166,31 @@ def run(
     # 2. Config & Pipeline
     console.print("\n🔧 Creating inference pipeline...")
     pipeline_config = create_pipeline_config(seg_instance, pose_instance, seg_interval, confidence, classes)
+
+    # Build FilterPolicy from CLI args
+    filter_policy = FilterPolicy.from_cli(
+        confidence=confidence,
+        seg_confidence=seg_confidence,
+        pose_confidence=pose_confidence,
+        classes=classes,
+        class_confidence=class_confidence,
+        keypoints=keypoints,
+        keypoint_confidence=keypoint_confidence,
+        keypoint_confidence_all=keypoint_confidence_all,
+        keypoint_min_visible=keypoint_min_visible,
+    )
+    
+    # Print filter summary
+    if filter_policy.has_class_filter:
+        console.print(f"   🎯 Class filter: {filter_policy.classes}")
+    if filter_policy.has_per_class_confidence:
+        console.print(f"   🎯 Per-class confidence: {filter_policy.per_class_confidence}")
+    if filter_policy.has_keypoint_filter:
+        console.print(f"   🦴 Keypoint filter active")
+        if filter_policy.per_keypoint_confidence:
+            console.print(f"      Per-keypoint: {filter_policy.per_keypoint_confidence}")
+        if filter_policy.keypoint_min_visible:
+            console.print(f"      Min visible: {filter_policy.keypoint_min_visible}")
     
     focus_lens_config = None
     if focus_size:
@@ -176,7 +209,7 @@ def run(
             mode_str += " + Expand"
         console.print(f"   🔍 Focus Lens: {focus_size}px ({focus_strategy}) | Mode: {mode_str}")
 
-    pipeline = DualModelPipeline(seg_instance, pose_instance, pipeline_config, focus_lens_config)
+    pipeline = DualModelPipeline(seg_instance, pose_instance, pipeline_config, focus_lens_config, filter_policy)
     console.print(f"   ✅ Pipeline ready (seg_interval={seg_interval})")
 
     # 3. Annotator

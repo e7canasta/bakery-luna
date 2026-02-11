@@ -18,6 +18,7 @@ from bakery.core.entities.focus_lens_config import FocusLensConfig
 
 from bakery_runtime import ModelInstance
 from bakery_runtime.processing import PreprocessCache
+from bakery_runtime.filtering import FilterPolicy, filter_detections, filter_keypoints
 
 from bakery.utils import (
     PerformanceMetrics,
@@ -49,7 +50,8 @@ class DualModelPipeline:
         seg_engine: ModelInstance,
         pose_engine: ModelInstance,
         config: PipelineConfig,
-        focus_lens_config: Optional[FocusLensConfig] = None
+        focus_lens_config: Optional[FocusLensConfig] = None,
+        filter_policy: Optional[FilterPolicy] = None,
     ):
         """
         Initialize dual-model pipeline.
@@ -59,10 +61,12 @@ class DualModelPipeline:
             pose_engine: Model instance for pose estimation (from bakery-runtime)
             config: Pipeline configuration
             focus_lens_config: Optional focus lens configuration for crop-based inference
+            filter_policy: Optional FilterPolicy for composable post-inference filtering
         """
         self.seg_engine = seg_engine
         self.pose_engine = pose_engine
         self.config = config
+        self.filter_policy = filter_policy
 
         # Metrics
         self.metrics = PerformanceMetrics()
@@ -144,8 +148,14 @@ class DualModelPipeline:
 
             # 2. Postprocess (delegated to engine)
             boxes, scores, class_ids, masks = self.seg_engine.postprocess(
-                seg_outputs, seg_meta, classes=self.config.class_filter
+                seg_outputs, seg_meta
             )
+
+            # 2b. Apply FilterPolicy (post-NMS, pre-entity)
+            if self.filter_policy:
+                boxes, scores, class_ids, masks = filter_detections(
+                    boxes, scores, class_ids, masks, self.filter_policy
+                )
 
             # 3. Create domain Entity
             self._cached_segmentation = self._create_segmentation(
@@ -163,6 +173,13 @@ class DualModelPipeline:
 
         # 2. Postprocess (delegated to engine)
         boxes, scores, class_ids, keypoints = self.pose_engine.postprocess(pose_outputs, pose_meta)
+
+        # 2b. Apply FilterPolicy keypoint filters (post-NMS, pre-entity)
+        if self.filter_policy and self.filter_policy.has_keypoint_filter and len(keypoints) > 0:
+            keypoints, boxes, scores = filter_keypoints(
+                keypoints, boxes, scores, self.filter_policy
+            )
+            class_ids = np.zeros(len(boxes), dtype=int)
 
         # 3. Create domain Entity
         pose_estimation = self._create_pose_estimation(

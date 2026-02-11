@@ -82,7 +82,6 @@ def postprocess_segmentation(
     conf_threshold: float = 0.25,
     iou_threshold: float = 0.45,
     verbose: bool = False,
-    classes: list[int] | None = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Postprocess YOLO segmentation output.
@@ -90,10 +89,12 @@ def postprocess_segmentation(
     Pipeline:
     1. Parse boxes, class scores, mask coefficients
     2. Filter by confidence threshold
-    3. Filter by class ID (if provided)
-    4. Convert boxes from xywh to xyxy
-    5. Apply NMS (Non-Maximum Suppression)
-    6. Generate masks from prototypes
+    3. Convert boxes from xywh to xyxy
+    4. Apply NMS (Non-Maximum Suppression)
+    5. Generate masks from prototypes
+
+    Note: Class-level and per-class confidence filtering is handled
+    by FilterPolicy in the pipeline layer.
 
     Args:
         output_boxes: Detection output [1, num_classes + 4 + mask_dim, num_anchors]
@@ -104,7 +105,6 @@ def postprocess_segmentation(
         conf_threshold: Confidence threshold
         iou_threshold: IoU threshold for NMS
         verbose: Print debug information
-        classes: List of class IDs to filter by (optional)
 
     Returns:
         Tuple with:
@@ -155,14 +155,6 @@ def postprocess_segmentation(
     scores = scores[mask]
     class_ids = class_ids[mask]
     mask_coefs = mask_coefs[mask]
-
-    # Filter by class ID
-    if classes is not None:
-        mask = np.isin(class_ids, classes)
-        boxes = boxes[mask]
-        scores = scores[mask]
-        class_ids = class_ids[mask]
-        mask_coefs = mask_coefs[mask]
 
     # Early return if no detections
     if len(boxes) == 0:
