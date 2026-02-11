@@ -3,19 +3,34 @@ name = "bakery-luna"
 version = "0.1.0"
 description = "Bakery Luna - Modular Vision Pipeline Package"
 readme = "README.md"
-requires-python = ">=3.11.14,<3.12"
+requires-python = ">=3.11,<3.12"
 dependencies = [
     # Core utilities
-    "psutil>=7.1.2",
-    "supervision>=0.26.1",
+    "psutil>=7.0.0",
+    "supervision>=0.26.0",
+    "numpy>=1.26.0",
+    "opencv-python>=4.9.0",
+    # Internal packages (resolved via uv workspace)
     "bakery-catalog",
     "bakery-runtime",
 ]
-# Heavy dependencies are now in bakery-exporters package
-# Install with: pip install bakery-exporters[full]
 
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["bakery"]
+
+[tool.uv.workspace]
+members = ["bakery-catalog", "bakery-runtime", "bakery-exporters"]
+
+[tool.uv.sources]
+bakery-catalog = { workspace = true }
+bakery-runtime = { workspace = true }

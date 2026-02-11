@@ -15,6 +15,7 @@ Environment Variables:
 - BAKERY_EXPORTERS_CACHE_DIR: Cache directory for exporters (default: ./.cache/exporters)
 - BAKERY_EXPORTERS_TEMP_DIR: Temporary directory for exports (default: $TEMP/.bakery)
 - BAKERY_EXPORTERS_LOG_LEVEL: Logging level (default: INFO)
+- ULTRALYTICS_WEIGHTS_DIR: Directory for Ultralytics weights (default: ./models/weights)
 """
 
 from __future__ import annotations
@@ -154,6 +155,16 @@ class ExportersConfig:
             self.cache_dir = Path(self.cache_dir)
         if isinstance(self.temp_dir, str):
             self.temp_dir = Path(self.temp_dir)
+        if isinstance(self.ultralytics_weights_dir, str):
+            self.ultralytics_weights_dir = Path(self.ultralytics_weights_dir)
+
+        # Ensure directory exists before configuring (Ultralytics might complain otherwise, or create it)
+        try:
+           self.ultralytics_weights_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+           pass # Handle permissions issues gracefully or let it fail later
+
+        self.configure_ultralytics()
 
     def ensure_dirs(self) -> None:
         """Create all required directories if they don't exist."""
@@ -196,7 +207,36 @@ class ExportersConfig:
             "int8_preset": self.int8_preset,
             "log_level": self.log_level,
             "verbose": self.verbose,
+            "ultralytics_weights_dir": str(self.ultralytics_weights_dir),
         }
+
+    # ========================================================================
+    # Ultralytics Settings
+    # ========================================================================
+
+    ultralytics_weights_dir: Path = field(default_factory=lambda: Path(
+        os.environ.get("ULTRALYTICS_WEIGHTS_DIR", "models/weights")
+    ))
+    """Directory where Ultralytics saves/loads weights (updates ultralytics.settings)"""
+
+    def configure_ultralytics(self) -> None:
+        """
+        Update Ultralytics settings to use the configured weights directory.
+        This modifies the global Ultralytics settings file.
+        """
+        try:
+            from ultralytics import settings
+            
+            # Convert to absolute path string for consistency
+            weights_dir_abs = str(self.ultralytics_weights_dir.resolve())
+            
+            # update only if different to avoid redundant writes
+            if settings['weights_dir'] != weights_dir_abs:
+                settings.update({'weights_dir': weights_dir_abs})
+                if self.verbose:
+                    print(f"Updated Ultralytics weights_dir to: {weights_dir_abs}")
+        except ImportError:
+            pass  # Ultralytics not installed or not needed yet
 
 
 # Global config instance (standalone mode)
