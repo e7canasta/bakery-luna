@@ -38,9 +38,13 @@ class ModelRepository:
         self.models_dir = models_dir
         self._core = ov.Core()
 
-    def discover_models(self) -> List[ModelConfig]:
+    def discover_models(self, yolo_version: Optional[str] = None) -> List[ModelConfig]:
         """
         Scan directory and return valid ModelConfig objects.
+
+        Args:
+            yolo_version: Optional YOLO version filter (e.g., "26", "11", "8").
+                         Filters models by name/path containing "yolo{version}".
 
         Returns:
             List of valid ModelConfig objects discovered in the directory
@@ -53,6 +57,15 @@ class ModelRepository:
 
         # Recursively search for .xml files
         for xml_path in self.models_dir.rglob("*.xml"):
+            # Filter by YOLO version if specified
+            if yolo_version:
+                path_str = str(xml_path).lower()
+                # Check if path contains yolo{version} pattern
+                # e.g., "yolo26" in path or "yolo11" in path
+                yolo_pattern = f"yolo{yolo_version}"
+                if yolo_pattern not in path_str:
+                    continue
+
             if self.validate_model(xml_path):
                 try:
                     metadata = self.extract_metadata(xml_path)
@@ -64,17 +77,18 @@ class ModelRepository:
 
         return models
 
-    def get_model_by_type(self, model_type: ModelType) -> Optional[ModelConfig]:
+    def get_model_by_type(self, model_type: ModelType, yolo_version: Optional[str] = None) -> Optional[ModelConfig]:
         """
         Find first model matching type (segmentation/pose).
 
         Args:
             model_type: Type of model to search for
+            yolo_version: Optional YOLO version filter (e.g., "26", "11", "8")
 
         Returns:
             First ModelConfig matching the type, or None if not found
         """
-        for model in self.discover_models():
+        for model in self.discover_models(yolo_version=yolo_version):
             if model.model_type == model_type:
                 return model
         return None
