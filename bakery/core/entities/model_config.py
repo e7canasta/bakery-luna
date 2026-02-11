@@ -3,6 +3,12 @@ Configuration entities - represents model and pipeline configurations.
 
 Domain entities for configuring models (size, resolution, device, precision)
 and pipelines (segmentation + pose configurations, smart scheduling parameters).
+
+.. deprecated::
+    ModelConfig is being replaced by:
+    - bakery_catalog.ModelInfo (artifact metadata: path, type, resolution, precision)
+    - bakery_runtime.ModelInstance (runtime instance: device, confidence, compiled model)
+    See bakery-runtime package for the new approach.
 """
 
 from dataclasses import dataclass
