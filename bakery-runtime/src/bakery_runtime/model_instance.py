@@ -4,25 +4,31 @@ Bakery Runtime - Model Instance
 
 Opaque, ready-to-use inference wrapper.
 
+The "mecánico" (mechanic) — takes model artifacts from the catalog,
+compiles them for the target device, and delivers ready-to-use instances.
+
 ModelInstance is what the pipeline sees. It combines:
 - ModelInfo from the catalog (WHAT the model is)
 - Runtime config (WHERE to run it — device, confidence)
 - An engine adapter (HOW to run it — OpenVINO, ONNX, etc.)
+- Processing logic (Pre/Post processing)
 
-The consumer calls .infer(tensor) and gets results.
+The consumer calls .infer_image(frame) and gets domain results.
 It does not know — and does not need to know — what engine is underneath.
 """
 
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Any, List
 
 import numpy as np
 
 from bakery_catalog import ModelRepository
-from bakery_catalog.model_info import ModelInfo
+from bakery_catalog.model_info import ModelInfo, ModelType
 from bakery_catalog.constants import FormatType
+from bakery_runtime.processing.image import preprocess_with_metadata
+from bakery_runtime.processing.results import postprocess_segmentation, postprocess_pose
 
 
 class Device(Enum):
@@ -45,13 +51,13 @@ class ModelInstance:
         # From a ModelInfo (catalog gave you the info)
         instance = ModelInstance.from_info(info, device=Device.GPU)
 
-        # From catalog directly (one-step)
-        instance = ModelInstance.from_catalog(
-            repo, "yolo26n-seg", 320, "fp16", device=Device.GPU
-        )
+        # Full cycle (simplest)
+        detections = instance.infer_image(frame)
 
-        # Use it — engine-agnostic
-        outputs = instance.infer(tensor)
+        # Optimized cycle (shared preprocessing)
+        tensor, metadata = instance.preprocess(frame)
+        raw_outputs = instance.infer_tensor(tensor)
+        detections = instance.postprocess(raw_outputs, metadata)
     """
 
     def __init__(
@@ -152,19 +158,126 @@ class ModelInstance:
             f"No engine available for model format: {info.model_path.suffix}"
         )
 
-    # ── Public API (engine-agnostic) ────────────────────────────────────
+    # ── Full Cycle API (Standard) ──────────────────────────────────────
+
+    def infer_image(self, image: np.ndarray) -> Tuple:
+        """
+        Full inference cycle: Preprocess -> Infer -> Postprocess.
+
+        Args:
+            image: Input image (BGR, OpenCV format).
+
+        Returns:
+            Post-processed results (boxes, scores, class_ids, masks/keypoints).
+            Format depends on model type (Segmentation or Pose).
+        """
+        # 1. Preprocess
+        tensor, metadata = self.preprocess(image)
+
+        # 2. Infer
+        raw_outputs = self.infer_tensor(tensor)
+
+        # 3. Postprocess
+        return self.postprocess(raw_outputs, metadata)
+
+    # ── Granular API (Optimized) ───────────────────────────────────────
+
+    def preprocess(self, image: np.ndarray) -> Tuple[np.ndarray, Dict]:
+        """
+        Preprocess image for inference.
+
+        Args:
+            image: Input image (BGR).
+
+        Returns:
+            Tuple of (tensor, metadata_dict).
+            Metadata contains 'ratio', 'pad_w', 'pad_h', 'orig_h', 'orig_w'.
+        """
+        input_shape = self.get_input_shape()
+        tensor, ratio, (pad_w, pad_h) = preprocess_with_metadata(image, input_shape)
+
+        metadata = {
+            "ratio": ratio,
+            "pad_w": pad_w,
+            "pad_h": pad_h,
+            "orig_h": image.shape[0],
+            "orig_w": image.shape[1],
+            "input_shape": input_shape,
+        }
+        return tensor, metadata
+
+    def infer_tensor(self, tensor: np.ndarray) -> Dict[str, np.ndarray]:
+        """
+        Run inference on preprocessed tensor.
+
+        Args:
+            tensor: Preprocessed input tensor [1, 3, H, W].
+
+        Returns:
+            Dictionary mapping output_name → output_array.
+        """
+        return self._engine.infer(tensor)
+
+    def postprocess(self, raw_outputs: Dict[str, np.ndarray], metadata: Dict) -> Tuple:
+        """
+        Postprocess raw model outputs into domain objects.
+
+        Args:
+            raw_outputs: Dictionary of raw output tensors.
+            metadata: Metadata dictionary from preprocess().
+
+        Returns:
+            Tuple of results.
+            - Segmentation: (boxes, scores, class_ids, masks)
+            - Pose: (boxes, scores, class_ids, keypoints)
+        """
+        # Unwrap dictionary if needed (engine returns dict, postprocess expects explicit args usually)
+        # But our postprocess functions expect specific arrays.
+        # We need to map dict keys to expected inputs based on model type.
+
+        # For OpenVINO YOLO models, we usually have implicit output order or names.
+        # Let's rely on the engine's output values for now, assuming standard YOLO order.
+        outputs_list = list(raw_outputs.values())
+
+        if self.model_type == ModelType.SEGMENTATION:
+            # YOLO seg has 2 outputs: boxes and masks
+            output_boxes = outputs_list[0]
+            output_masks = outputs_list[1] if len(outputs_list) > 1 else None
+
+            if output_masks is None:
+                # Fallback or error?
+                raise ValueError("Segmentation model did not return masks output")
+
+            return postprocess_segmentation(
+                output_boxes,
+                output_masks,
+                metadata["input_shape"],
+                conf_threshold=self._confidence,
+            )
+
+        elif self.model_type == ModelType.POSE:
+            # YOLO pose has 1 output: keypoints+boxes
+            output_data = outputs_list[0]
+
+            return postprocess_pose(
+                output_data,
+                metadata["input_shape"],
+                conf_threshold=self._confidence,
+            )
+
+        else:
+            raise NotImplementedError(f"Postprocessing for {self.model_type} not implemented")
+
+    # ── Legacy/Compatibility ───────────────────────────────────────────
 
     def infer(self, tensor: np.ndarray) -> Dict[str, np.ndarray]:
         """
-        Run inference on input tensor.
-
-        Args:
-            tensor: Preprocessed input tensor [1, 3, H, W]
-
-        Returns:
-            Dictionary mapping output_name → output_array
+        Legacy alias for infer_tensor.
+        Kept for backward compatibility during migration.
         """
-        return self._engine.infer(tensor)
+        return self.infer_tensor(tensor)
+
+    # ── Properties & Helpers ───────────────────────────────────────────
 
     def get_input_shape(self) -> Tuple[int, int]:
         """Get model input resolution (H, W)."""
@@ -177,8 +290,6 @@ class ModelInstance:
     def get_num_outputs(self) -> int:
         """Get number of model outputs."""
         return self._engine.get_num_outputs()
-
-    # ── Properties ──────────────────────────────────────────────────────
 
     @property
     def info(self) -> ModelInfo:

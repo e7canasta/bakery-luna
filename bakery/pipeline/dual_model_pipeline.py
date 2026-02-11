@@ -9,17 +9,16 @@ from typing import Optional, Tuple
 import numpy as np
 import cv2
 import supervision as sv
+
 from bakery.core.entities.frame import Frame, CropInfo
 from bakery.core.entities.detection import Segmentation, BoundingBox, Mask
 from bakery.core.entities.pose import PoseEstimation, Skeleton
 from bakery.core.entities.model_config import PipelineConfig
 from bakery.core.entities.focus_lens_config import FocusLensConfig
+
 from bakery_runtime import ModelInstance
-from bakery.adapters.openvino.preprocessing import PreprocessCache
-from bakery.adapters.openvino.postprocessing import (
-    postprocess_segmentation,
-    postprocess_pose
-)
+from bakery_runtime.processing import PreprocessCache
+
 from bakery.utils.metrics import PerformanceMetrics
 from bakery.utils.focus_lens import (
     apply_focus_lens,
@@ -36,7 +35,7 @@ class DualModelPipeline:
     - Preprocessing with cache optimization
     - Segmentation inference (every N frames)
     - Pose inference (every frame)
-    - Postprocessing to structured outputs
+    - Postprocessing via ModelInstance
     - Performance metrics tracking
     """
 
@@ -55,22 +54,13 @@ class DualModelPipeline:
             pose_engine: Model instance for pose estimation (from bakery-runtime)
             config: Pipeline configuration
             focus_lens_config: Optional focus lens configuration for crop-based inference
-
-        Example:
-            >>> seg_instance = ModelInstance.from_catalog(repo, "yolo26l-seg", 320)
-            >>> pose_instance = ModelInstance.from_catalog(repo, "yolo26m-pose", 320)
-            >>> pipeline = DualModelPipeline(seg_instance, pose_instance, config)
-            >>> # With focus lens:
-            >>> from bakery.core.entities import FocusLensConfig
-            >>> focus_config = FocusLensConfig(focus_size=640)
-            >>> pipeline = DualModelPipeline(seg_engine, pose_engine, config, focus_config)
         """
         self.seg_engine = seg_engine
         self.pose_engine = pose_engine
         self.config = config
         self.focus_lens_config = focus_lens_config
 
-        # Preprocessing cache
+        # Preprocessing cache (from bakery-runtime)
         self.preprocess_cache = PreprocessCache()
 
         # Metrics
@@ -94,10 +84,6 @@ class DualModelPipeline:
 
         Returns:
             Tuple of (Segmentation, PoseEstimation)
-
-        Example:
-            >>> frame = Frame.from_array(image, frame_id=0)
-            >>> segmentation, poses = pipeline.process_frame(frame)
         """
         self.metrics.total_frames += 1
 
@@ -115,6 +101,9 @@ class DualModelPipeline:
         pose_shape = self.pose_engine.get_input_shape()
 
         # Preprocessing with cache
+        # Note: We rely on the raw frame data here.
+        # Future optimization: Let engines handle their own preprocessing if they diverge.
+        # Currently, we assume both use the same letterbox logic.
         seg_tensor, seg_meta, pose_tensor, pose_meta = \
             self.preprocess_cache.get_or_compute(
                 frame.data, frame.frame_id,
@@ -123,22 +112,13 @@ class DualModelPipeline:
 
         # Smart scheduling: Segmentation every N frames
         if frame.frame_id % self.config.seg_interval == 0:
-            seg_outputs = self.seg_engine.infer(seg_tensor)
+            # 1. Infer
+            seg_outputs = self.seg_engine.infer_tensor(seg_tensor)
 
-            # Get output arrays (handle different output naming)
-            output_keys = list(seg_outputs.keys())
-            seg_output_boxes_data = seg_outputs[output_keys[0]]  # First output: boxes
-            seg_output_masks_data = seg_outputs[output_keys[1]] if len(output_keys) > 1 else None
+            # 2. Postprocess (delegated to engine)
+            boxes, scores, class_ids, masks = self.seg_engine.postprocess(seg_outputs, seg_meta)
 
-            # Postprocess segmentation
-            boxes, scores, class_ids, masks = postprocess_segmentation(
-                seg_output_boxes_data,
-                seg_output_masks_data,
-                seg_shape,
-                conf_threshold=self.config.confidence_threshold
-            )
-
-            # Create Segmentation entity
+            # 3. Create domain Entity
             self._cached_segmentation = self._create_segmentation(
                 boxes, scores, class_ids, masks,
                 frame.frame_id, seg_meta
@@ -149,20 +129,13 @@ class DualModelPipeline:
         segmentation = self._cached_segmentation if self._cached_segmentation is not None else Segmentation.empty(frame.frame_id)
 
         # Always run pose
-        pose_outputs = self.pose_engine.infer(pose_tensor)
+        # 1. Infer
+        pose_outputs = self.pose_engine.infer_tensor(pose_tensor)
 
-        # Get output array (pose has 1 output)
-        output_keys = list(pose_outputs.keys())
-        pose_output_data = pose_outputs[output_keys[0]]
+        # 2. Postprocess (delegated to engine)
+        boxes, scores, class_ids, keypoints = self.pose_engine.postprocess(pose_outputs, pose_meta)
 
-        # Postprocess pose
-        boxes, scores, class_ids, keypoints = postprocess_pose(
-            pose_output_data,
-            pose_shape,
-            conf_threshold=self.config.confidence_threshold
-        )
-
-        # Create PoseEstimation entity
+        # 3. Create domain Entity
         pose_estimation = self._create_pose_estimation(
             boxes, scores, keypoints,
             frame.frame_id, pose_meta
@@ -191,17 +164,7 @@ class DualModelPipeline:
     ) -> Segmentation:
         """
         Convert postprocessing outputs to Segmentation entity.
-
-        Args:
-            boxes: Detection boxes in xyxy format
-            scores: Confidence scores
-            class_ids: Class IDs
-            masks: Binary masks
-            frame_id: Frame identifier
-            metadata: Preprocessing metadata (ratio, padding)
-
-        Returns:
-            Segmentation entity with transformed coordinates
+        Handles coordinate transformation from letterbox space to frame space.
         """
         if len(boxes) == 0:
             return Segmentation.empty(frame_id)
@@ -232,12 +195,11 @@ class DualModelPipeline:
             bbox_objects.append(bbox)
 
             # Create Mask - resize to original frame size
-            # Match original run_lens.origin.py logic exactly
             if masks is not None and len(masks) > i:
                 mask = masks[i]  # Keep as float [0, 1] from sigmoid
                 mask_h, mask_w = mask.shape
 
-                # Remove letterbox padding (same logic as original)
+                # Remove letterbox padding
                 pad_top = int(pad_h)
                 pad_bottom = int(pad_h)
                 pad_left = int(pad_w)
@@ -254,17 +216,17 @@ class DualModelPipeline:
                         interpolation=cv2.INTER_LINEAR
                     )
                 else:
-                    # Fallback: resize directly without cropping
+                    # Fallback
                     mask_resized = cv2.resize(
                         mask,
                         (orig_w, orig_h),
                         interpolation=cv2.INTER_LINEAR
                     )
 
-                # Threshold at 0.5 (mask is float [0, 1])
+                # Threshold at 0.5
                 mask_data = (mask_resized > 0.5).astype(np.bool_)
             else:
-                # Create empty mask with original frame size
+                # Create empty mask
                 mask_data = np.zeros((orig_h, orig_w), dtype=np.bool_)
 
             mask = Mask(data=mask_data, bbox=bbox)
@@ -286,16 +248,7 @@ class DualModelPipeline:
     ) -> PoseEstimation:
         """
         Convert postprocessing outputs to PoseEstimation entity.
-
-        Args:
-            boxes: Detection boxes in xyxy format
-            scores: Confidence scores
-            keypoints: Keypoints array [N, 17, 3]
-            frame_id: Frame identifier
-            metadata: Preprocessing metadata (ratio, padding)
-
-        Returns:
-            PoseEstimation entity with transformed coordinates
+        Handles coordinate transformation from letterbox space to frame space.
         """
         if len(boxes) == 0:
             return PoseEstimation.empty(frame_id)
@@ -319,7 +272,7 @@ class DualModelPipeline:
         skeleton_objects = []
 
         for i in range(len(boxes)):
-            # Create BoundingBox for skeleton
+            # Create BoundingBox for skeleton (class_id=0 for person)
             bbox = BoundingBox.from_xyxy(transformed_boxes[i], scores[i], class_id=0)
 
             # Create Skeleton
@@ -331,43 +284,20 @@ class DualModelPipeline:
             skeletons=skeleton_objects
         )
 
+    # ── Utils (Metrics, Reset, Crop Info) ──────────────────────────────
+
     def get_metrics(self) -> PerformanceMetrics:
-        """
-        Get current performance metrics.
-
-        Returns:
-            PerformanceMetrics object with pipeline statistics
-
-        Example:
-            >>> metrics = pipeline.get_metrics()
-            >>> print(f"Frames processed: {metrics.total_frames}")
-            >>> print(f"Segmentation runs: {metrics.seg_runs}")
-        """
+        """Get current performance metrics."""
         return self.metrics
 
     def reset_metrics(self):
-        """
-        Reset performance metrics.
-
-        Useful when starting a new video or processing session.
-        """
+        """Reset performance metrics."""
         self.metrics = PerformanceMetrics()
         self._cached_segmentation = None
         self._current_crop_info = None
 
     def get_crop_info(self) -> Optional[CropInfo]:
-        """
-        Get current crop info from last processed frame.
-
-        Returns:
-            CropInfo if Focus Lens is active, None otherwise.
-            Useful for passing to annotators to show focus region.
-
-        Example:
-            >>> crop_info = pipeline.get_crop_info()
-            >>> if crop_info:
-            ...     print(f"Focus region: {crop_info.x}, {crop_info.y}")
-        """
+        """Get current crop info from last processed frame."""
         return self._current_crop_info
 
     def _map_segmentation_to_full_frame(
@@ -377,18 +307,7 @@ class DualModelPipeline:
         full_width: int,
         full_height: int
     ) -> Segmentation:
-        """
-        Map segmentation from cropped to full frame coordinates.
-
-        Args:
-            segmentation: Segmentation in cropped frame coordinates
-            crop_info: Crop information from Focus Lens
-            full_width: Full frame width
-            full_height: Full frame height
-
-        Returns:
-            Segmentation with coordinates in full frame space
-        """
+        """Map segmentation from cropped to full frame coordinates."""
         if len(segmentation) == 0:
             return segmentation
 
@@ -436,16 +355,7 @@ class DualModelPipeline:
         pose_estimation: PoseEstimation,
         crop_info: CropInfo
     ) -> PoseEstimation:
-        """
-        Map pose estimation from cropped to full frame coordinates.
-
-        Args:
-            pose_estimation: PoseEstimation in cropped frame coordinates
-            crop_info: Crop information from Focus Lens
-
-        Returns:
-            PoseEstimation with coordinates in full frame space
-        """
+        """Map pose estimation from cropped to full frame coordinates."""
         if len(pose_estimation) == 0:
             return pose_estimation
 

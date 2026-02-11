@@ -13,8 +13,12 @@ Usage:
 """
 
 from bakery_runtime.model_instance import ModelInstance, Device
+from bakery_runtime.benchmark import BenchmarkRunner, BenchmarkResult, CPUMonitor
 
 __all__ = [
     "ModelInstance",
     "Device",
+    "BenchmarkRunner",
+    "BenchmarkResult",
+    "CPUMonitor",
 ]
