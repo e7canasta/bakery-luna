@@ -14,7 +14,7 @@ from bakery.core.entities.detection import Segmentation, BoundingBox, Mask
 from bakery.core.entities.pose import PoseEstimation, Skeleton
 from bakery.core.entities.model_config import PipelineConfig
 from bakery.core.entities.focus_lens_config import FocusLensConfig
-from bakery.adapters.openvino.inference_engine import InferenceEngine
+from bakery_runtime import ModelInstance
 from bakery.adapters.openvino.preprocessing import PreprocessCache
 from bakery.adapters.openvino.postprocessing import (
     postprocess_segmentation,
@@ -42,8 +42,8 @@ class DualModelPipeline:
 
     def __init__(
         self,
-        seg_engine: InferenceEngine,
-        pose_engine: InferenceEngine,
+        seg_engine: ModelInstance,
+        pose_engine: ModelInstance,
         config: PipelineConfig,
         focus_lens_config: Optional[FocusLensConfig] = None
     ):
@@ -51,15 +51,15 @@ class DualModelPipeline:
         Initialize dual-model pipeline.
 
         Args:
-            seg_engine: Inference engine for segmentation model
-            pose_engine: Inference engine for pose estimation model
+            seg_engine: Model instance for segmentation (from bakery-runtime)
+            pose_engine: Model instance for pose estimation (from bakery-runtime)
             config: Pipeline configuration
             focus_lens_config: Optional focus lens configuration for crop-based inference
 
         Example:
-            >>> seg_engine = InferenceEngine(seg_config)
-            >>> pose_engine = InferenceEngine(pose_config)
-            >>> pipeline = DualModelPipeline(seg_engine, pose_engine, config)
+            >>> seg_instance = ModelInstance.from_catalog(repo, "yolo26l-seg", 320)
+            >>> pose_instance = ModelInstance.from_catalog(repo, "yolo26m-pose", 320)
+            >>> pipeline = DualModelPipeline(seg_instance, pose_instance, config)
             >>> # With focus lens:
             >>> from bakery.core.entities import FocusLensConfig
             >>> focus_config = FocusLensConfig(focus_size=640)
