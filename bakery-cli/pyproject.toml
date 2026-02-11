@@ -1,0 +1,26 @@
+[project]
+name = "bakery-cli"
+version = "0.1.0"
+description = "Unified CLI for the Bakery Vision Pipeline"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "typer>=0.9.0",
+    "rich>=13.7.0",
+    "bakery-luna",
+    "bakery-runtime",
+    "bakery-catalog",
+    "bakery-exporters",
+    "supervision>=0.18.0",
+    "opencv-python>=4.9.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bakery_cli"]
+
+[project.scripts]
+bakery = "bakery_cli.main:app"
