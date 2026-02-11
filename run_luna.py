@@ -75,19 +75,25 @@ def discover_models(models_dir: Path, args) -> tuple:
         print(f"\n🔍 Discovering models in: {models_dir}")
 
         repository = ModelRepository(models_dir)
-        models = repository.discover_models()
+        # Filter by YOLO version if specified
+        yolo_version = getattr(args, 'yolo_version', None)
+        if yolo_version:
+            print(f"   🎯 Filtering by YOLO version: {yolo_version}")
+        models = repository.discover_models(yolo_version=yolo_version)
 
         if not models and not (seg_model and pose_model):
             print(f"❌ No models found in {models_dir}")
+            if yolo_version:
+                print(f"   (with YOLO version filter: {yolo_version})")
             sys.exit(1)
 
         print(f"✅ Found {len(models)} model(s)")
 
         # Get models by type if not already specified
         if not seg_model:
-            seg_model = repository.get_model_by_type(ModelType.SEGMENTATION)
+            seg_model = repository.get_model_by_type(ModelType.SEGMENTATION, yolo_version=yolo_version)
         if not pose_model:
-            pose_model = repository.get_model_by_type(ModelType.POSE)
+            pose_model = repository.get_model_by_type(ModelType.POSE, yolo_version=yolo_version)
 
     # Print model info
     if seg_model:
@@ -446,6 +452,12 @@ Examples:
   uv run run_luna.py --video videos/sample.mp4 --models-dir exports/fp16/ \\
       --seg-model exports/int8/.../yolo11n-seg_int8.xml --seg-device CPU \\
       --pose-model exports/fp16/.../yolo11n-pose.xml --pose-device GPU
+
+  # Filter by YOLO version (only use YOLO26 models)
+  uv run run_luna.py --video videos/sample.mp4 --models-dir exports/fp16/ --yolo-version 26
+
+  # Filter by YOLO version (only use YOLO11 models)
+  uv run run_luna.py --video videos/sample.mp4 --models-dir exports/fp16/ --yolo-version 11
         """
     )
 
@@ -557,6 +569,13 @@ Examples:
         type=Path,
         default=None,
         help="Path to specific pose model .xml file (overrides --models-dir discovery)"
+    )
+
+    parser.add_argument(
+        "--yolo-version",
+        type=str,
+        default=None,
+        help="Filter models by YOLO version (e.g., '26', '11', '8'). Filters by model name/path containing 'yolo{version}'"
     )
 
     args = parser.parse_args()

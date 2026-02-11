@@ -8,6 +8,8 @@ dependencies = [
     # Core utilities
     "psutil>=7.1.2",
     "supervision>=0.26.1",
+    "bakery-catalog",
+    "bakery-runtime",
 ]
 # Heavy dependencies are now in bakery-exporters package
 # Install with: pip install bakery-exporters[full]

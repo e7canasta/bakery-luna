@@ -9,7 +9,7 @@ Bakery Configuration Module (DEPRECATED)
         from bakery.config import config, ModelPath
 
     New import:
-        from bakery.catalog import config, ModelPath
+        from bakery_catalog import config, ModelPath
 
 This module re-exports from ``bakery.catalog`` for backwards compatibility.
 A deprecation warning is emitted on import.
@@ -19,13 +19,13 @@ import warnings
 
 warnings.warn(
     "bakery.config is deprecated. Use bakery.catalog instead. "
-    "Example: from bakery.catalog import config, ModelPath",
+    "Example: from bakery_catalog import config, ModelPath",
     DeprecationWarning,
     stacklevel=2
 )
 
 # Re-export everything from catalog for backwards compatibility
-from bakery.catalog import (
+from bakery_catalog import (
     # Config
     config,
     BakeryConfig,

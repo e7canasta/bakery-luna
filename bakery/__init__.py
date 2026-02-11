@@ -24,7 +24,7 @@ Usage:
 """
 
 # Import from catalog (canonical location)
-from bakery.catalog import config, ModelPath, get_model_path, list_available_models
+from bakery_catalog import config, ModelPath, get_model_path, list_available_models
 
 __version__ = "0.1.0"
 __project_phase__ = "Luna"
