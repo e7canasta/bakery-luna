@@ -41,7 +41,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import argparse
-from bakery.catalog import config, YOLO_VERSIONS, MODEL_SIZES, RESOLUTIONS
+from bakery_catalog import config, YOLO_VERSIONS, MODEL_SIZES, RESOLUTIONS
 from bakery_exporters import ExportPipeline, ExportFormat
 from bakery_exporters.cli import create_base_parser, add_format_argument
 

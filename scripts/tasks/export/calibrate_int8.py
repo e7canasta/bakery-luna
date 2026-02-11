@@ -43,7 +43,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import argparse
 import openvino as ov
 
-from bakery.catalog import config, RESOLUTIONS
+from bakery_catalog import config, RESOLUTIONS
 from bakery_exporters import ExportPipeline, ExportFormat
 from bakery_exporters.calibration import discover_onnx_models, CalibrationDataLoader
 
@@ -184,7 +184,7 @@ Requirements:
 
             # Save quantized model
             print(f"   4️⃣  Saving INT8 calibrated model...")
-            from bakery.catalog import ModelPath
+            from bakery_catalog import ModelPath
             output_path = ModelPath.build(
                 model_info['name'],
                 model_info['resolution'],
